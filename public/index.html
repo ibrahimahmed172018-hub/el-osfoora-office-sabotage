@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>خيانة في المكتب — لعبة العصفورة المصرية</title>
+  
+  <!-- Google Fonts: Cairo & Tajawal for Authentic Egyptian Arabic Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Tajawal:wght@500;700;900&display=swap" rel="stylesheet">
+  
+  <!-- Phaser is served locally so the game also works without internet access. -->
+  <script src="/vendor/phaser.min.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <!-- App Wrapper -->
+  <div id="game-app">
+
+    <!-- In-Game Floating Toast & Notification Container -->
+    <div id="game-toast-container" class="game-toast-container"></div>
+
+    <!-- Mobile Orientation Hint (Optional prompt for landscape) -->
+    <div id="portrait-orient-hint" class="portrait-hint-overlay hidden">
+      <div class="hint-box glass-panel">
+        <span class="rotate-icon">📱🔄</span>
+        <p>لتجربة أفضل، يرجى تدوير الموبايل بالعرض (Landscape)</p>
+        <button id="btn-dismiss-orient" class="btn btn-secondary" style="font-size:0.85rem; padding:6px 14px; margin-top:8px;">متابعة بالوضع الحالي</button>
+      </div>
+    </div>
+
+    <!-- ================= 1. LOBBY & MENU OVERLAY ================= -->
+    <div id="lobby-screen" class="screen-overlay active">
+      <div class="lobby-card glass-panel">
+        <div class="lobby-header">
+          <div class="badge-tag">🎮 إصدار الشركات المصرية v1.0</div>
+          <h1 class="game-title">خيانة في المكتب <span class="sub-title">(العصفورة)</span></h1>
+          <p class="tagline">مين في التيم بيعطل الشغل ومين المخرّب اللي هيلبسنا في الحيط؟</p>
+        </div>
+
+        <div class="lobby-body">
+          <!-- Player Setup -->
+          <div class="form-group">
+            <label for="player-name-input">اسمك في الشركة:</label>
+            <input type="text" id="player-name-input" placeholder="اكتب اسمك يا هندسة..." value="البشمهندس" maxlength="15">
+          </div>
+
+          <!-- Character Carousel / Selector -->
+          <div class="character-selection-section">
+            <h3>اختر شخصيتك من التيم:</h3>
+            <div class="characters-grid" id="characters-selector-grid">
+              <!-- Rendered via JS from CHARACTERS data with portraits -->
+            </div>
+          </div>
+
+          <!-- Room Actions -->
+          <div class="room-action-tabs">
+            <div class="action-box">
+              <h3>إنشاء روم جديدة</h3>
+              <button id="btn-create-room" class="btn btn-primary pulse">🚀 افتح روم للشركة (Host)</button>
+            </div>
+            <div class="action-divider">أو</div>
+            <div class="action-box">
+              <h3>دخول بروم موجودة</h3>
+              <div class="join-input-wrap">
+                <input type="text" id="room-code-input" placeholder="كود الروم (مثلاً: AB3X)" maxlength="6">
+                <button id="btn-join-room" class="btn btn-secondary">🔑 دخول</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= 2. WAITING ROOM LOBBY ================= -->
+    <div id="room-lobby-screen" class="screen-overlay hidden">
+      <div class="waiting-card glass-panel">
+        <div class="waiting-header">
+          <h2>غرفة الاستقبال — كود الروم: <span id="display-room-code" class="highlight-code">----</span></h2>
+          <p>شير الكود ده مع زمايلك في الشركة عشان يدخلوا معاك!</p>
+        </div>
+
+        <div class="players-list-container">
+          <h3>الموظفين المتواجدين حالياً (<span id="players-count">1</span>/10):</h3>
+          <div id="lobby-players-grid" class="lobby-players-grid">
+            <!-- Dynamic Player Cards -->
+          </div>
+        </div>
+
+        <!-- Room Task Settings (Host Controls) -->
+        <div class="lobby-settings-box glass-panel">
+          <div class="setting-title">
+            <span>⚙️ عدد التاسكات لكل موظف:</span>
+            <span id="host-only-badge" class="badge-hint">👑 يتحكم فيها الهوست</span>
+          </div>
+          <div class="task-count-selector" id="task-count-selector">
+            <button class="btn-setting-option" data-count="5">⚡ 5 (سريع)</button>
+            <button class="btn-setting-option active" data-count="7">⚖️ 7 (متوازن ⭐)</button>
+            <button class="btn-setting-option" data-count="9">📦 9 (دسم)</button>
+            <button class="btn-setting-option" data-count="12">🔥 12 (تحدي)</button>
+          </div>
+        </div>
+
+        <div class="waiting-controls">
+          <button id="btn-add-bot" class="btn btn-outline">🤖 إضافة زميل بوت للتجربة (Bot)</button>
+          <button id="btn-start-game" class="btn btn-primary btn-large glow hidden">🔥 ابدأ الشغل والديدلاين!</button>
+          <div id="waiting-host-notice" class="host-notice">في انتظار الهوست لبدء الجيم...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= 3. ROLE REVEAL SCREEN ================= -->
+    <div id="role-reveal-screen" class="screen-overlay hidden">
+      <div class="role-card-anim glass-panel" id="role-card-inner">
+        <div class="role-badge" id="role-badge-text">دورك السري</div>
+        <h2 id="role-title" class="role-title">موظف غلبان</h2>
+        <div class="character-preview-large" id="role-char-preview"></div>
+        <p id="role-description" class="role-desc">
+          مهمتك تخلص تاسكات الديدلاين قبل ما الشركة تفلس، وتكشف المخرّب في اجتماعات الطوارئ!
+        </p>
+        <div id="role-saboteurs-list" class="saboteur-allies hidden"></div>
+        <div class="role-timer-bar"></div>
+      </div>
+    </div>
+
+    <!-- ================= 4. PHASER 3 GAME CANVAS CONTAINER ================= -->
+    <div id="phaser-container"></div>
+
+    <!-- ================= 5. IN-GAME HUD ================= -->
+    <div id="game-hud" class="game-hud hidden">
+      <!-- Top Bar: Task Progress & Status -->
+      <div class="hud-top-bar">
+        <div class="tasks-progress-wrapper">
+          <div class="task-bar-label">
+            <span>📊 إنجاز تاسكات الديدلاين:</span>
+            <span id="task-progress-percent">0%</span>
+          </div>
+          <div class="task-bar-track">
+            <div id="task-bar-fill" class="task-bar-fill" style="width: 0%;"></div>
+          </div>
+        </div>
+
+        <div class="status-indicators">
+          <!-- 10-Minute Project Deadline Countdown Timer -->
+          <div id="game-deadline-timer" class="game-timer-badge" title="الوقت المتبقي لانتهاء ديدلاين المشروع (10 دقائق)">
+            <span class="timer-icon">⏳</span>
+            <span class="timer-label">الديدلاين:</span>
+            <span id="hud-game-timer" class="timer-digits">10:00</span>
+          </div>
+
+          <button id="btn-toggle-tasks-mobile" class="btn-toggle-tasks-mobile">📋 التاسكات</button>
+          <div id="sabotage-alert-banner" class="sabotage-alert hidden">
+            <span class="alert-icon">⚠️</span>
+            <span id="sabotage-alert-text">عطل في السيرفر!</span>
+            <span id="sabotage-timer" class="sabotage-timer-badge">35s</span>
+          </div>
+          <div class="room-tag">روم: <span id="hud-room-code">----</span></div>
+        </div>
+      </div>
+
+      <!-- Left Task Checklist -->
+      <div class="hud-tasks-list glass-panel" id="hud-tasks-panel">
+        <h4>📋 تاسكاتك المطلوبة:</h4>
+        <ul id="player-tasks-ul">
+          <!-- Populated by JS -->
+        </ul>
+      </div>
+
+      <!-- Virtual Joystick Zone (Bottom-Left on Mobile / Touch) -->
+      <div id="virtual-joystick-container" class="virtual-joystick-container">
+        <div id="joystick-base" class="joystick-base">
+          <div id="joystick-thumb" class="joystick-thumb"></div>
+          <div class="joystick-directions">
+            <span class="j-dir dir-up">▲</span>
+            <span class="j-dir dir-down">▼</span>
+            <span class="j-dir dir-left">◀</span>
+            <span class="j-dir dir-right">▶</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Buttons (Bottom Right / Mobile & Desktop) -->
+      <div class="hud-action-dock">
+        <!-- Emergency Button -->
+        <button id="btn-hud-emergency" class="action-btn btn-emergency" title="اجتماع طوارئ مفاجئ">
+          <span class="icon">🚨</span>
+          <span class="label">طوارئ</span>
+        </button>
+
+        <!-- Report Dead Body Button -->
+        <button id="btn-hud-report" class="action-btn btn-report disabled" title="الحقوا ده في مصيبة هنا!">
+          <span class="icon">📢</span>
+          <span class="label">بلاغ</span>
+        </button>
+
+        <!-- Use / Task Button -->
+        <button id="btn-hud-use" class="action-btn btn-use disabled" title="استخدام / إنجاز التاسك">
+          <span class="icon">⚙️</span>
+          <span class="label">إنجاز [E]</span>
+        </button>
+
+        <!-- Saboteur Actions Dock -->
+        <div id="saboteur-dock" class="saboteur-dock hidden">
+          <!-- Sabotage Menu Trigger -->
+          <button id="btn-hud-sabotage" class="action-btn btn-sabotage" title="بوّظ الدنيا">
+            <span class="icon">💣</span>
+            <span class="label">تخريب</span>
+          </button>
+
+          <!-- Kill / Shahoork Button -->
+          <button id="btn-hud-kill" class="action-btn btn-kill disabled" title="شحّور / اطرده برة الشركة">
+            <span class="icon">💀</span>
+            <span class="label">شحّور [Q]</span>
+            <span id="kill-cooldown-badge" class="cooldown-badge">15s</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= 6. SABOTAGE WHEEL MODAL ================= -->
+    <div id="sabotage-modal" class="modal-overlay hidden">
+      <div class="modal-card glass-panel sabotage-card">
+        <div class="modal-header">
+          <h3>💣 لوحة تخريب الشركة (بوّظ الدنيا)</h3>
+          <button class="btn-close-modal" id="btn-close-sabotage">✖</button>
+        </div>
+        <div class="sabotage-options-grid">
+          <div class="sabotage-item" data-type="lights">
+            <div class="sabotage-icon">💡⚡</div>
+            <h4>قطع النور والكهربا</h4>
+            <p>يقلل الرؤية للموظفين ويخليهم ماشيين بكشافات</p>
+            <button class="btn btn-danger btn-sabotage-trigger" data-type="lights">اقطع النور!</button>
+          </div>
+          <div class="sabotage-item" data-type="server">
+            <div class="sabotage-icon">🖥️🔥</div>
+            <h4>تفجير السيرفر (Critical)</h4>
+            <p>إنذار أحمر وتدمير للداتا خلال 35 ثانية لو متصلحش!</p>
+            <button class="btn btn-danger btn-sabotage-trigger" data-type="server">وقّع السيرفر!</button>
+          </div>
+          <div class="sabotage-item" data-type="ac">
+            <div class="sabotage-icon">❄️❌</div>
+            <h4>قفل التكييف المركزي</h4>
+            <p>خنقة وحر شديد يبطأ حركة كل الموظفين في الماب</p>
+            <button class="btn btn-danger btn-sabotage-trigger" data-type="ac">اقفل التكييف!</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= 7. MINI-GAMES TASK MODALS ================= -->
+    <!-- Task 1: Router Task -->
+    <div id="task-modal-router" class="task-modal-overlay hidden">
+      <div class="task-box glass-panel">
+        <div class="task-header">
+          <h3>🔌 تاسك الراوتر: "شيل الفيشة واستنى 10 ثواني وحطها تاني"</h3>
+          <button class="btn-close-task">✖</button>
+        </div>
+        <div class="router-game-content">
+          <div class="router-device">
+            <div class="router-lights">
+              <span class="r-light" id="r-pwr">PWR</span>
+              <span class="r-light" id="r-dsl">DSL</span>
+              <span class="r-light" id="r-inet">INTERNET</span>
+            </div>
+            <div class="router-wire-area">
+              <div class="socket-wall"></div>
+              <div id="power-plug" class="power-plug plugged">
+                <span class="plug-pin"></span>
+                <span class="plug-pin"></span>
+                <div class="plug-body">اسحب الفيشة</div>
+              </div>
+            </div>
+          </div>
+          <div class="router-timer-display" id="router-countdown">الفيشة متوصلة — اسحبها الأول!</div>
+          <p class="task-instruction">اسحب الفيشة بالماوس، استنى العداد يخلص 10 ثواني، ورجعها تاني في الحيطة!</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task 2: Whack-a-Bug Task -->
+    <div id="task-modal-bugs" class="task-modal-overlay hidden">
+      <div class="task-box glass-panel">
+        <div class="task-header">
+          <h3>🐛 تاسك البجات: "دوس على الحشرات اللي بتطلع في الكود"</h3>
+          <button class="btn-close-task">✖</button>
+        </div>
+        <div class="bug-game-content">
+          <div class="code-terminal">
+            <div class="terminal-header">server_crash_logs.py — باقات متبقية: <span id="bugs-remaining-count">5</span></div>
+            <div class="bugs-grid" id="bugs-grid">
+              <!-- 9 Grid Slots -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task 3: Budget Counting Task -->
+    <div id="task-modal-budget" class="task-modal-overlay hidden">
+      <div class="task-box glass-panel">
+        <div class="task-header">
+          <h3>💵 تاسك الميزانية: "عد الفلوس اللي باقية في المحفظة"</h3>
+          <button class="btn-close-task">✖</button>
+        </div>
+        <div class="budget-game-content">
+          <div class="wallet-display">
+            <div class="wallet-info">المبلغ المطلوب حسابه بدقة: <span id="target-budget-amount" class="highlight-code">0</span> ج.م</div>
+            <div class="current-sum">المجموع اللي عديته: <span id="current-budget-sum">0</span> ج.م</div>
+          </div>
+          <div class="currency-notes-container">
+            <button class="currency-btn note-200" data-val="200">٢٠٠ جنيه</button>
+            <button class="currency-btn note-100" data-val="100">١٠٠ جنيه</button>
+            <button class="currency-btn note-50" data-val="50">٥٠ جنيه</button>
+            <button class="currency-btn note-20" data-val="20">٢٠ جنيه</button>
+            <button class="currency-btn note-10" data-val="10">١٠ جنيه</button>
+            <button class="currency-btn coin-1" data-val="1">١ جنيه فضة</button>
+          </div>
+          <div class="budget-actions">
+            <button id="btn-reset-budget" class="btn btn-secondary">إعادة العد من الأول</button>
+            <button id="btn-submit-budget" class="btn btn-primary">تأكيد الميزانية ✅</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task 4: Coffee Making Task -->
+    <div id="task-modal-coffee" class="task-modal-overlay hidden">
+      <div class="task-box glass-panel">
+        <div class="task-header">
+          <h3>☕ تاسك القهوة: "اظبط السكر والبن واقفل الكنكة"</h3>
+          <button class="btn-close-task">✖</button>
+        </div>
+        <div class="coffee-game-content">
+          <div class="coffee-recipe-guide">
+            المطلوب: قهوة مظبوطة (<span id="coffee-req-coffee">2</span> معلقة بن + <span id="coffee-req-sugar">2</span> معلقة سكر) ثم تقليب وغليان
+          </div>
+          <div class="coffee-station">
+            <div class="ingredient-box">
+              <button id="btn-add-coffee-powder" class="btn btn-coffee">🥄 حط معلقة بن (<span id="curr-coffee-spoons">0</span>)</button>
+              <button id="btn-add-sugar-powder" class="btn btn-sugar">🥄 حط معلقة سكر (<span id="curr-sugar-spoons">0</span>)</button>
+            </div>
+            <div class="kanaka-pot" id="kanaka-pot">
+              <div class="kanaka-liquid" id="kanaka-liquid"></div>
+              <div class="stir-stick" id="stir-stick"></div>
+            </div>
+          </div>
+          <div class="coffee-actions">
+            <button id="btn-stir-coffee" class="btn btn-secondary">🌀 قلّب بالمعلقة</button>
+            <button id="btn-brew-coffee" class="btn btn-primary disabled">🔥 ولّع السخان واقفل الكنكة</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task 5: Character Specific Task Modal -->
+    <div id="task-modal-special" class="task-modal-overlay hidden">
+      <div class="task-box glass-panel">
+        <div class="task-header">
+          <h3 id="special-task-title">🎯 تاسك التخصص</h3>
+          <button class="btn-close-task">✖</button>
+        </div>
+        <div class="special-game-content" id="special-task-body">
+          <!-- Dynamic per character -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Task 6: Card Swipe / Access Badge Task -->
+    <div id="task-modal-cardswipe" class="task-modal-overlay hidden">
+      <div class="task-box glass-panel">
+        <div class="task-header">
+          <h3>🪪 تاسك كارت الدخول: "مرر الكارت على جهاز البصمة"</h3>
+          <button class="btn-close-task">✖</button>
+        </div>
+        <div class="cardswipe-game-content">
+          <div class="card-scanner-machine">
+            <div class="scanner-screen">
+              <div class="scanner-light" id="card-scanner-light"></div>
+              <span id="card-scanner-status">برجاء تمرير كارت الشركة</span>
+            </div>
+            <div class="card-slot-track" id="card-slot-track">
+              <div class="company-id-card" id="draggable-id-card">
+                <div class="card-chip"></div>
+                <div class="card-photo">👤</div>
+                <div class="card-text">
+                  <strong>كارت موظف رسمي</strong>
+                  <span>ID: #2026</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="task-instruction">اسحب الكارت من اليمين إلى الشمال بسرعة معتدلة لتسجيل الحضور!</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task 7: HR Stamp Task -->
+    <div id="task-modal-hrstamp" class="task-modal-overlay hidden">
+      <div class="task-box glass-panel">
+        <div class="task-header">
+          <h3>📑 تاسك أختام HR: "اختم استمارة الإجازة والاعتماد"</h3>
+          <button class="btn-close-task">✖</button>
+        </div>
+        <div class="hrstamp-game-content">
+          <div class="paper-document">
+            <div class="doc-header">📄 استمارة طلب إجازة رسمية — شؤون العاملين</div>
+            <p class="doc-body">بموجب هذا الطلب، يُرجى اعتماد استمارة الإجازة وتوقيع الأختام الرسمية للشركة.</p>
+            <div class="stamps-zone">
+              <div class="stamp-slot" id="stamp-slot-1" data-stamped="false">
+                <span>[ مكان ختم المدير ]</span>
+              </div>
+              <div class="stamp-slot" id="stamp-slot-2" data-stamped="false">
+                <span>[ مكان ختم HR ]</span>
+              </div>
+            </div>
+          </div>
+          <div class="stamp-toolbox">
+            <button id="btn-apply-stamp" class="btn btn-danger stamp-tool-btn">🔴 اضغط بالختم على الأماكن المحددة</button>
+            <button id="btn-submit-stamp" class="btn btn-primary disabled">✍️ اعتماد الاستمارة</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task 8: Trash Shredder Empty Task -->
+    <div id="task-modal-trashempty" class="task-modal-overlay hidden">
+      <div class="task-box glass-panel">
+        <div class="task-header">
+          <h3>🗑️ تاسك المفرمة: "شد اليد لتفريغ مفرمة الورق"</h3>
+          <button class="btn-close-task">✖</button>
+        </div>
+        <div class="trashempty-game-content">
+          <div class="shredder-bin">
+            <div class="shredder-papers" id="shredder-papers">📄 🗑️ 📑 📰 📜</div>
+            <div class="shredder-lever-track">
+              <div class="shredder-handle" id="shredder-handle">
+                <span>⬇️ اضغط على اليد واسحبها للأسفل</span>
+              </div>
+            </div>
+          </div>
+          <div class="trash-progress-bar">
+            <div class="trash-fill" id="trash-progress-fill" style="width: 0%;"></div>
+          </div>
+          <p class="task-instruction" id="trash-instruction-text">اضغط مع الاستمرار على اليد واسحبها للأسفل حتى يكتمل التفريغ!</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task 9: Patch Panel Network Wires -->
+    <div id="task-modal-wires" class="task-modal-overlay hidden">
+      <div class="task-box glass-panel wires-task-box">
+        <div class="task-header">
+          <h3>🔀 تاسك السويتش: "وصّل كابلات الشبكة باللون المناسب"</h3>
+          <button class="btn-close-task">✖</button>
+        </div>
+        <div class="wires-game-content">
+          <div class="patch-panel" id="patch-panel">
+            <svg id="wires-svg" class="wires-svg"></svg>
+            <div class="wire-ports-col left-ports" id="wire-left-ports"></div>
+            <div class="wire-ports-col right-ports" id="wire-right-ports"></div>
+          </div>
+          <p class="task-instruction">اضغط على طرف الكابل في اليمين ثم اضغط على المنفذ المطابق له في الشمال!</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task 10: Printer Paper Jam Task -->
+    <div id="task-modal-printerjam" class="task-modal-overlay hidden">
+      <div class="task-box glass-panel">
+        <div class="task-header">
+          <h3>🖨️ تاسك البرنتر: "سلّك الورقة المحشورة في الرول"</h3>
+          <button class="btn-close-task">✖</button>
+        </div>
+        <div class="printerjam-game-content">
+          <div class="printer-machine">
+            <div class="printer-roller-slot">
+              <div class="jammed-paper" id="jammed-paper">
+                <span class="paper-text">📄 تقرير_المبيعات_نهائي.pdf [محشور]</span>
+                <span class="pull-arrow">⬆️ اسحب للأعلى بهدوء</span>
+              </div>
+            </div>
+            <div class="printer-screen" id="printer-status-screen">⚠️ تنبيه: ورق محشور في التغذية!</div>
+          </div>
+          <p class="task-instruction">اسحب الورقة لأعلى بالماوس/اللمس حتى تخرج بالكامل من الرول!</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task 11: Data Transfer (Backup Multi-Stage: Download / Upload) -->
+    <div id="task-modal-datatransfer" class="task-modal-overlay hidden">
+      <div class="task-box glass-panel">
+        <div class="task-header">
+          <h3 id="transfer-task-title">💾 تاسك الباك-أب: نقل بيانات السيرفر</h3>
+          <button class="btn-close-task">✖</button>
+        </div>
+        <div class="datatransfer-game-content">
+          <div class="transfer-computer">
+            <div class="transfer-screen">
+              <div class="transfer-icon" id="transfer-icon">💾 ➡️ ☁️</div>
+              <h4 id="transfer-screen-title">جاهز لبدء نقل الملفات</h4>
+              <div class="transfer-progress-track">
+                <div class="transfer-progress-fill" id="transfer-progress-fill" style="width:0%;"></div>
+              </div>
+              <div class="transfer-stats" id="transfer-stats">0 MB / 500 MB (0%)</div>
+            </div>
+          </div>
+          <button id="btn-start-transfer" class="btn btn-primary btn-large">🚀 ابدأ النقل الآن</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task 12: Tea Delivery Multi-Stage -->
+    <div id="task-modal-teadelivery" class="task-modal-overlay hidden">
+      <div class="task-box glass-panel">
+        <div class="task-header">
+          <h3 id="tea-task-title">🫖 تاسك ضيافة الاجتماع</h3>
+          <button class="btn-close-task">✖</button>
+        </div>
+        <div class="teadelivery-game-content" id="teadelivery-body">
+          <div class="tea-stage-container" id="tea-stage-1-box">
+            <div class="tea-kettle-box">
+              <div class="kettle-graphic">🫖💨</div>
+              <div class="tea-cups-tray">🍵 🍵 🍵</div>
+            </div>
+            <p class="task-instruction">اضغط على زر صب الشاي لملء الصينية وتجهيزها للاجتماع!</p>
+            <button id="btn-pour-tea" class="btn btn-primary btn-large">🫖 صب الشاي المظبوط</button>
+          </div>
+          <div class="tea-stage-container hidden" id="tea-stage-2-box">
+            <div class="tea-delivery-table">
+              <div class="meeting-table-graphic">🪑 💼 🪑</div>
+              <div class="tray-target-slot" id="tray-target-slot">
+                <span>[ ضع صينية الشاي هنا ]</span>
+              </div>
+            </div>
+            <button id="btn-place-tray" class="btn btn-primary btn-large">🍵 تقديم الشاي على الطاولة</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task 13: Invoice & CEO Check Multi-Stage -->
+    <div id="task-modal-invoice" class="task-modal-overlay hidden">
+      <div class="task-box glass-panel">
+        <div class="task-header">
+          <h3 id="invoice-task-title">🧾 تاسك الفاتورة واعتماد الشيك</h3>
+          <button class="btn-close-task">✖</button>
+        </div>
+        <div class="invoice-game-content" id="invoice-body">
+          <div class="invoice-stage-box" id="invoice-stage-1-box">
+            <div class="invoice-preview glass-panel">
+              <h4>🧾 فاتورة مصاريف السيرفرات والتطوير</h4>
+              <p>إجمالي المصاريف: <strong>45,000 ج.م</strong></p>
+              <div class="barcode-graphic">||||||||||||||||||||||||</div>
+            </div>
+            <button id="btn-print-invoice" class="btn btn-primary btn-large">🖨️ طباعة واستخراج الفاتورة</button>
+          </div>
+          <div class="invoice-stage-box hidden" id="invoice-stage-2-box">
+            <div class="check-document glass-panel">
+              <h4>🏦 شيك بنكي معتمد — بنك مصر</h4>
+              <p>ادفعوا لأمر: <strong>شركة الحلول العظمى</strong></p>
+              <p>مبلغ وقدره: <strong>45,000 ج.م</strong></p>
+              <div class="ceo-signature-zone" id="ceo-signature-zone">
+                <span>[ توقيع واعتماد المدير العام ]</span>
+              </div>
+            </div>
+            <button id="btn-sign-check" class="btn btn-danger btn-large">✍️ توقيع الشيك واعتماده</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task Modal 9: Water Cooler Dispenser -->
+    <div id="task-modal-watercooler" class="modal-overlay task-modal-overlay hidden">
+      <div class="task-modal-card glass-panel">
+        <div class="task-header">
+          <h3>💧 تاسك الكولدير: ملء كوب مياه ساقعة</h3>
+          <button class="btn-close-task">✖</button>
+        </div>
+        <div class="watercooler-game-content">
+          <p class="task-instruction">اضغط مع الاستمرار على حنفية المياه الساقعة لملء الكوب بالكامل!</p>
+          <div class="cooler-machine">
+            <div class="cooler-bottle">💧</div>
+            <div class="cooler-taps">
+              <div class="tap tap-red">🔴 ساخن</div>
+              <div class="tap tap-blue active-tap">🔵 ساقع</div>
+            </div>
+            <div class="cooler-cup-zone">
+              <div class="water-cup">
+                <div id="cup-water-fill" class="cup-fill"></div>
+              </div>
+            </div>
+          </div>
+          <button id="btn-pour-water" class="btn btn-primary btn-large" style="width:100%; margin-top:15px;">💧 اضغط لملء الكوب (100%)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task Modal 10: Air Conditioner Remote -->
+    <div id="task-modal-airconditioner" class="modal-overlay task-modal-overlay hidden">
+      <div class="task-modal-card glass-panel">
+        <div class="task-header">
+          <h3>❄️ تاسك التكييف: ضبط الريموت على 24°C</h3>
+          <button class="btn-close-task">✖</button>
+        </div>
+        <div class="ac-game-content">
+          <p class="task-instruction">اضبط درجة حرارة التكييف على 24°C بالضبط عشان نوفر كهربا والجو يبقى معتدل!</p>
+          <div class="ac-remote-box">
+            <div class="ac-screen">
+              <div id="ac-temp-display" class="ac-temp">18°C</div>
+              <div class="ac-mode">❄️ COOL AUTO</div>
+            </div>
+            <div class="ac-buttons-grid">
+              <button id="btn-ac-temp-up" class="btn btn-secondary ac-btn">🔼 زيادة</button>
+              <button id="btn-ac-temp-down" class="btn btn-secondary ac-btn">🔽 تقليل</button>
+            </div>
+          </div>
+          <button id="btn-confirm-ac" class="btn btn-primary btn-large" style="width:100%; margin-top:15px;">✅ تأكيد وتشغيل التكييف</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task Modal 11: Hand Sanitizer -->
+    <div id="task-modal-sanitize" class="modal-overlay task-modal-overlay hidden">
+      <div class="task-modal-card glass-panel">
+        <div class="task-header">
+          <h3>🧴 تاسك التعقيم: كحول الجل 3 ضغطات</h3>
+          <button class="btn-close-task">✖</button>
+        </div>
+        <div class="sanitize-game-content">
+          <p class="task-instruction">اضغط على مضخة التعقيم 3 مرات لتطهير اليدين بالكامل!</p>
+          <div class="sanitizer-bottle">
+            <div id="sanitizer-pump" class="sanitizer-pump-head">🧴 اضغط هنا</div>
+            <div class="sanitizer-body">جل معقم 70% كحول</div>
+          </div>
+          <div id="sanitize-counter-text" style="font-weight:bold; color:var(--color-primary); margin:15px 0; font-size:1.1rem;">عدد الضغطات: 0 / 3</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task Modal 12: Light Switches -->
+    <div id="task-modal-lightswitch" class="modal-overlay task-modal-overlay hidden">
+      <div class="task-modal-card glass-panel">
+        <div class="task-header">
+          <h3>💡 تاسك النجفة: تشغيل مفاتيح إضاءة الممر</h3>
+          <button class="btn-close-task">✖</button>
+        </div>
+        <div class="lightswitch-game-content">
+          <p class="task-instruction">شغّل المفاتيح الـ 3 لتنوير ممر الشركة!</p>
+          <div class="switches-rack">
+            <div class="switch-box"><button class="wall-switch" data-sw="1">OFF</button><span>لمبة 1</span></div>
+            <div class="switch-box"><button class="wall-switch" data-sw="2">OFF</button><span>لمبة 2</span></div>
+            <div class="switch-box"><button class="wall-switch" data-sw="3">OFF</button><span>لمبة 3</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task Modal 13: Paper Stapler -->
+    <div id="task-modal-stapler" class="modal-overlay task-modal-overlay hidden">
+      <div class="task-modal-card glass-panel">
+        <div class="task-header">
+          <h3>📎 تاسك الدباسة: تدبيس أوراق العقد المهم</h3>
+          <button class="btn-close-task">✖</button>
+        </div>
+        <div class="stapler-game-content">
+          <p class="task-instruction">اضغط على الأماكن الـ 3 المحددة بالدباسة لتدبيس ملحق العقد!</p>
+          <div class="contract-paper">
+            <h4>📄 عقد اتفاقية مشروع الشركة لعام 2026</h4>
+            <div class="staple-targets">
+              <div class="staple-slot" id="staple-1">📎 دبابيس 1</div>
+              <div class="staple-slot" id="staple-2">📎 دبابيس 2</div>
+              <div class="staple-slot" id="staple-3">📎 دبابيس 3</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task Modal 14: Sticky Notes Kanban -->
+    <div id="task-modal-stickynotes" class="modal-overlay task-modal-overlay hidden">
+      <div class="task-modal-card glass-panel">
+        <div class="task-header">
+          <h3>📌 تاسك لوحة المهام: نقل الاستيكي نوتس إلى DONE</h3>
+          <button class="btn-close-task">✖</button>
+        </div>
+        <div class="stickynotes-game-content">
+          <p class="task-instruction">اضغط على كل استيكي نوت لنقلها إلى قائمة [تم الإنجاز ✅]!</p>
+          <div class="kanban-board">
+            <div class="kanban-col in-progress">
+              <h5>قيد التنفيذ ⏳</h5>
+              <div id="sticky-list">
+                <div class="sticky-note yellow" data-note="1">🎨 تسليم تصميم اللوجو</div>
+                <div class="sticky-note green" data-note="2">🎬 تعديل ألوان الفيديو</div>
+                <div class="sticky-note pink" data-note="3">📊 مراجعة ديدلاين العميل</div>
+              </div>
+            </div>
+            <div class="kanban-col done-col">
+              <h5>تم الإنجاز ✅</h5>
+              <div id="done-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task Modal 15: Shred Secrets -->
+    <div id="task-modal-shredsecrets" class="modal-overlay task-modal-overlay hidden">
+      <div class="task-modal-card glass-panel">
+        <div class="task-header">
+          <h3>📄 تاسك السرية: فرم مستندات زيادة المرتبات</h3>
+          <button class="btn-close-task">✖</button>
+        </div>
+        <div class="shredsecrets-game-content">
+          <p class="task-instruction">المستند سري للغاية! اضغط على زر الفرم للتخلص منه فوراً!</p>
+          <div class="secret-doc-box glass-panel">
+            <div class="top-secret-stamp">🚨 سري للغاية 🤫</div>
+            <p>كشف زيادة مرتبات قسم الموظفين لسنة 2026</p>
+            <p style="color:#64748b; font-size:0.75rem;">(يُحظر تسريبه قبل الديدلاين)</p>
+          </div>
+          <button id="btn-shred-secret-doc" class="btn btn-danger btn-large" style="width:100%; margin-top:15px;">🗑️ فرم المستند وإتلافه الآن</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task Modal 16: Fix Projector Multi-Stage -->
+    <div id="task-modal-projector" class="modal-overlay task-modal-overlay hidden">
+      <div class="task-modal-card glass-panel">
+        <div class="task-header">
+          <h3 id="projector-task-title">📽️ تاسك البروجيكتور وشاشة العرض</h3>
+          <button class="btn-close-task">✖</button>
+        </div>
+        <div class="projector-game-content">
+          <div class="projector-stage-box" id="projector-stage-1-box">
+            <div style="font-size:3.5rem; margin-bottom:10px;">🔌</div>
+            <h4>أخذ كابل الـ HDMI الجديد من راك السيرفرات</h4>
+            <p style="color:#cbd5e1; margin-bottom:15px;">الكابل القديم محروق.. استلم الكابل الجديد وتوجه لقاعة الاجتماعات لتوصيله بالشاشة!</p>
+            <button id="btn-grab-hdmi" class="btn btn-primary btn-large">📦 استلام كابل HDMI 4K</button>
+          </div>
+          <div class="projector-stage-box hidden" id="projector-stage-2-box">
+            <div style="font-size:3.5rem; margin-bottom:10px;">📽️</div>
+            <h4>توصيل الكابل وتشغيل بروجيكتور قاعة الاجتماعات</h4>
+            <p style="color:#cbd5e1; margin-bottom:15px;">ركّب الكابل وشغّل البروجيكتور عشان العميل يشوف البرزنتيشن!</p>
+            <button id="btn-start-projector" class="btn btn-primary btn-large">✨ تشغيل العرض 100%</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task Modal 17: Order Koshary Multi-Stage -->
+    <div id="task-modal-koshary" class="modal-overlay task-modal-overlay hidden">
+      <div class="task-modal-card glass-panel">
+        <div class="task-header">
+          <h3 id="koshary-task-title">🍲 تاسك غداء كشري الشركة</h3>
+          <button class="btn-close-task">✖</button>
+        </div>
+        <div class="koshary-game-content">
+          <div class="koshary-stage-box" id="koshary-stage-1-box">
+            <div style="font-size:3.5rem; margin-bottom:10px;">🛵</div>
+            <h4>الدليفري وصل الاستقبال ومعه علب الكشري!</h4>
+            <p style="color:#cbd5e1; margin-bottom:15px;">استلم الأكياس من الاستقبال وادخل بيها على بوفيه الشركة لتوزيعها على الشباب!</p>
+            <button id="btn-pickup-koshary" class="btn btn-primary btn-large">🥡 استلام أكياس الكشري والدقة</button>
+          </div>
+          <div class="koshary-stage-box hidden" id="koshary-stage-2-box">
+            <div style="font-size:3.5rem; margin-bottom:10px;">😋</div>
+            <h4>رص علب الكشري وتوزيع الدقة والشطة بالبوفيه</h4>
+            <p style="color:#cbd5e1; margin-bottom:15px;">حط العلب على ترابيزة البوفيه عشان الكل يتغدى ويركز في الشغل!</p>
+            <button id="btn-distribute-koshary" class="btn btn-primary btn-large">🍲 رص العلب وبالهنا والشفا</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task Modal 18: Dual-Key Breaker (تاسك القاطع المزدوج المتزامن) -->
+    <div id="task-modal-dualbreaker" class="modal-overlay task-modal-overlay hidden">
+      <div class="task-modal-card glass-panel" style="border-color:#f59e0b;">
+        <div class="task-header">
+          <h3 id="dualbreaker-task-title">⚡ قاطع الطوارئ المزدوج (مهمة جماعية)</h3>
+          <button class="btn-close-task">✖</button>
+        </div>
+        <div class="dualbreaker-game-content">
+          <p class="task-instruction" id="dualbreaker-instruction">هذا التاسك يتطلب موظفين اثنين يضغطان على القاطعين في نفس اللحظة (خلال 3.5 ثانية)!</p>
+          
+          <div class="breakers-sync-display">
+            <div class="breaker-slot-indicator" id="ind-breaker-a">
+              <div class="ind-led" id="led-breaker-a"></div>
+              <span>قاطع السيرفرات (أ) ⚡</span>
+              <small id="name-breaker-a">غير مفعّل</small>
+            </div>
+            <div class="sync-link-line">
+              <div class="sync-lightning-icon">⚡</div>
+            </div>
+            <div class="breaker-slot-indicator" id="ind-breaker-b">
+              <div class="ind-led" id="led-breaker-b"></div>
+              <span>قاطع الاستقبال (ب) ⚡</span>
+              <small id="name-breaker-b">غير مفعّل</small>
+            </div>
+          </div>
+
+          <div class="dual-status-alert hidden" id="dual-waiting-badge">
+            <span class="pulse-dot"></span>
+            <span id="dual-waiting-text">في انتظار الموظف الثاني... ⏳ 3.5s</span>
+          </div>
+
+          <div class="dual-action-box">
+            <button id="btn-pull-dual-breaker" class="btn btn-warning btn-large" style="width:100%; font-size:1.2rem; padding:18px;">⚡ رفع وتثبيت القاطع الآن</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= 8. EMERGENCY MEETING & VOTING ================= -->
+    <div id="meeting-screen" class="screen-overlay hidden">
+      <div class="meeting-card glass-panel">
+        <div class="meeting-header">
+          <div class="siren-light">🚨</div>
+          <div class="meeting-title-wrap">
+            <h2 id="meeting-title-text">اجتماع طوارئ مفاجئ!</h2>
+            <p id="meeting-caller-sub">الداعي للاجتماع: <span id="meeting-caller-name">البشمهندس</span></p>
+          </div>
+          <div class="meeting-timer-box">
+            <span class="clock-icon">⏱️</span>
+            <span id="meeting-timer-digits">45</span>s
+          </div>
+        </div>
+
+        <div class="meeting-layout">
+          <!-- Voting Grid -->
+          <div class="voting-section">
+            <h3>اضغط على الموظف اللي شاكك فيه:</h3>
+            <div class="meeting-players-grid" id="meeting-players-grid">
+              <!-- Rendered alive/dead player vote cards -->
+            </div>
+            <div class="skip-vote-wrap">
+              <button id="btn-vote-skip" class="btn btn-secondary btn-skip-vote">
+                ⏭️ تخطي التصويت (سكيب - مفيش دليل قاطع)
+              </button>
+            </div>
+          </div>
+
+          <!-- Meeting Live Chat & Slang Barks -->
+          <div class="meeting-chat-section">
+            <h4>💬 مناقشة الاجتماع واللهجة المصرية:</h4>
+            <div class="chat-messages-box" id="meeting-chat-messages">
+              <!-- Dynamic Chat Messages -->
+            </div>
+            <!-- Slang Quick Phrases -->
+            <div class="quick-slang-bar">
+              <button class="btn-slang" data-text="والله أنا كنت في البوفيه بعمل قهوة!">☕ كنت في البوفيه</button>
+              <button class="btn-slang" data-text="شفت فلان طالع من فتحة التهوية!">💨 شفته طالع من الفنت</button>
+              <button class="btn-slang" data-text="ده كان بيجري ورايا وناوي على غدر!">🏃 كان بيجري ورايا</button>
+              <button class="btn-slang" data-text="سكيب يا جماعة مفيش دليل قاطع!">⏭️ سكيب مفيش دليل</button>
+            </div>
+            <div class="chat-input-wrap">
+              <input type="text" id="meeting-custom-chat-input" placeholder="اكتب تبريرك أو اتهم حد..." maxlength="50">
+              <button id="btn-send-meeting-chat" class="btn btn-primary">إرسال ✉️</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= 9. EJECTION ANIMATION SEQUENCE ================= -->
+    <div id="ejection-screen" class="screen-overlay hidden">
+      <div class="ejection-stage">
+        <div class="company-gate-backdrop">
+          <div class="office-door">
+            <div class="door-leaf left-door"></div>
+            <div class="door-leaf right-door"></div>
+          </div>
+          <div class="ejected-character-figure" id="ejected-character-figure"></div>
+          <div class="security-guard-kick">👮‍♂️👢</div>
+        </div>
+        <div class="ejection-announcement glass-panel">
+          <h2 id="ejection-text-title" class="ejection-text">تم رفد اللاعب...</h2>
+          <p id="ejection-sub-quote" class="ejection-sub">وطلع (مكانش المخرّب.. ظلمتوه يا ظلمة!)</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= 10. GAME OVER SCREEN ================= -->
+    <div id="gameover-screen" class="screen-overlay hidden">
+      <div class="gameover-card glass-panel">
+        <div class="gameover-banner" id="gameover-banner-wrap">
+          <h1 id="gameover-winner-title">الشركة سلمت البروجكت والعميل دفع! 🎉</h1>
+          <p id="gameover-desc-text">الموظفين الغلابة كسبوا وخلصوا كل شغلهم بنجاح!</p>
+        </div>
+
+        <div class="gameover-players-summary">
+          <h3>كشف حقيقة التيم:</h3>
+          <div class="summary-players-grid" id="gameover-summary-grid">
+            <!-- Final role reveal of everyone -->
+          </div>
+        </div>
+
+        <div class="gameover-actions">
+          <button id="btn-back-to-lobby" class="btn btn-primary btn-large">🔄 العودة لغرفة الانتظار</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Scripts Execution Order -->
+  <script src="/js/audio.js"></script>
+  <script src="/js/characters.js"></script>
+  <script src="/js/map.js"></script>
+  <script src="/js/tasks.js"></script>
+  <script src="/js/game.js"></script>
+  <script src="/js/ui.js"></script>
+</body>
+</html>

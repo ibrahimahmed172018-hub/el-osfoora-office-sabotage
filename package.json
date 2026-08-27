@@ -1,0 +1,27 @@
+{
+  "name": "el-osfoora-office-sabotage",
+  "version": "1.0.0",
+  "description": "خيانة في المكتب (العصفورة) - لعبة جماعية مستوحاة من ثقافة الشركات المصرية مع محرك Phaser 3 و Socket.io",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "phaser3",
+    "multiplayer",
+    "socketio",
+    "egyptian-slang",
+    "office-sabotage"
+  ],
+  "author": "Antigravity & Eng. Ebrahim Ahmed",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "phaser": "^3.80.1",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.3",
+    "uuid": "^11.0.5"
+  }
+}
