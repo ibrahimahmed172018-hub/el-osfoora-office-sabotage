@@ -820,8 +820,9 @@ function checkWinConditions(room) {
     return;
   }
 
-  // 2. Saboteurs equal or outnumber employees
-  if (livingSaboteurs.length >= livingEmployees.length) {
+  // In a 1v1 round, keep the game active until someone completes tasks or dies.
+  const isOneVsOne = players.length === 2;
+  if (livingEmployees.length === 0 || (!isOneVsOne && livingSaboteurs.length >= livingEmployees.length)) {
     endGame(room, 'SABOTEUR', 'الشركة فلست والمخرّب ضحك عليكم! سيطر المخرّبون على الشركة بالكامل! 😈🔥');
     return;
   }
