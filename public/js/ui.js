@@ -64,11 +64,17 @@ class GameUI {
   }
 
   initSocket() {
-    this.socket = io();
+    const socketServerUrl = window.GAME_SERVER_URL || window.location.origin;
+    this.socket = io(socketServerUrl, { transports: ['websocket', 'polling'] });
 
     this.socket.on('connect', () => {
       this.localPlayerId = this.socket.id;
       console.log('Connected with socket ID:', this.localPlayerId);
+    });
+
+    this.socket.on('connect_error', (error) => {
+      console.error('Socket connection failed:', error.message);
+      window.showGameAlert('تعذر الاتصال بسيرفر اللعبة. افتح رابط Railway الصحيح.', 'error', 6000);
     });
 
     // Room Created / Updated

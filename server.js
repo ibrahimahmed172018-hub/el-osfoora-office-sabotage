@@ -16,6 +16,9 @@ const io = new Server(server, {
 
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', service: 'el-osfoora' });
+});
 app.get('/vendor/phaser.min.js', (req, res) => {
   res.sendFile(path.join(__dirname, 'node_modules', 'phaser', 'dist', 'phaser.min.js'));
 });
