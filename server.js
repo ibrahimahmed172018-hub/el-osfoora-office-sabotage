@@ -608,8 +608,12 @@ function startGame(room) {
   room.dualKeyState = { breakerA: null, breakerB: null, timeout: null };
 
   const playerList = Array.from(room.players.values());
-  const saboteurCount = Math.max(1, Math.floor(playerList.length / 5));
   const tasksCount = room.settings?.tasksCount || 7;
+
+  // Solo mode (1 player): player is an EMPLOYEE exploring tasks
+  // 2+ players: at least 1 Saboteur
+  const isSoloMode = playerList.length === 1;
+  const saboteurCount = isSoloMode ? 0 : Math.max(1, Math.floor(playerList.length / 5));
 
   // Shared usage tracker ensuring each employee gets different tasks across the office
   const taskUsageTracker = {
@@ -627,7 +631,7 @@ function startGame(room) {
     p.x = 400 + (idx % 3) * 60 - 60;
     p.y = 300 + Math.floor(idx / 3) * 60 - 30;
 
-    if (idx < saboteurCount) {
+    if (!isSoloMode && idx < saboteurCount) {
       p.role = 'SABOTEUR'; // المخرّب / العميل
       p.tasks = []; // Saboteur fakes tasks
     } else {
@@ -635,6 +639,11 @@ function startGame(room) {
       p.tasks = generatePlayerTasks(p.character, tasksCount, taskUsageTracker);
     }
   });
+
+  // Calculate total tasks accurately
+  const employees = playerList.filter(p => p.role === 'EMPLOYEE');
+  room.totalTasksCount = employees.reduce((acc, p) => acc + p.tasks.length, 0);
+  if (room.totalTasksCount <= 0) room.totalTasksCount = 1;
 
   // Send role info to each player privately
   playerList.forEach(p => {
@@ -1091,13 +1100,24 @@ function checkWinConditions(room) {
   const livingEmployees = players.filter(p => p.isAlive && p.role === 'EMPLOYEE');
   const livingSaboteurs = players.filter(p => p.isAlive && p.role === 'SABOTEUR');
 
-  // 1. All Saboteurs Dead / Ejected
+  // Solo mode (1 player exploring tasks)
+  if (players.length === 1) {
+    if (room.tasksProgress >= 100) {
+      endGame(room, 'EMPLOYEES', 'ألف مبروك! أنجزت كل مهام الشركة بنجاح وسلمت البروجكت في ميعاده! 🚀🎉');
+    }
+    return;
+  }
+
+  // 1. All Saboteurs Dead / Ejected (Multiplayer: 2+ players)
   if (livingSaboteurs.length === 0) {
     endGame(room, 'EMPLOYEES', 'الشركة سلمت البروجكت والعميل دفع! تم كشف وطرد كل المخرّبين! 🎉💼');
     return;
   }
 
-  // In a 1v1 round, keep the game active until someone completes tasks or dies.
+  // 2. Saboteurs Win Conditions:
+  // - All employees eliminated (livingEmployees === 0)
+  // - In 3+ players: Saboteurs equal or outnumber living employees
+  // - In 2-player match (1v1): Only win if the employee dies!
   const isOneVsOne = players.length === 2;
   if (livingEmployees.length === 0 || (!isOneVsOne && livingSaboteurs.length >= livingEmployees.length)) {
     endGame(room, 'SABOTEUR', 'الشركة فلست والمخرّب ضحك عليكم! سيطر المخرّبون على الشركة بالكامل! 😈🔥');
