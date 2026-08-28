@@ -636,10 +636,6 @@ function startGame(room) {
     }
   });
 
-  // Calculate total tasks
-  const employees = playerList.filter(p => p.role === 'EMPLOYEE');
-  room.totalTasksCount = employees.reduce((acc, p) => acc + p.tasks.length, 0);
-
   // Send role info to each player privately
   playerList.forEach(p => {
     if (!p.isBot) {
@@ -651,6 +647,10 @@ function startGame(room) {
         saboteurs: p.role === 'SABOTEUR' ? playerList.filter(x => x.role === 'SABOTEUR').map(x => x.name) : [],
         gameTimer: room.gameTimer
       });
+    } else {
+      p.aiState = 'IDLE';
+      p.actionTimer = 0;
+      p.memory = { sawKills: [], sawBodies: [], trusted: [], lastAccused: null };
     }
   });
 
@@ -716,58 +716,319 @@ function updateRoomLoop(room) {
   checkWinConditions(room);
 }
 
-function updateBotAI(room, bot) {
-  // Move bots slightly around tasks or towards victims if saboteur
-  if (Math.random() < 0.3) {
-    const dx = (Math.random() - 0.5) * 40;
-    const dy = (Math.random() - 0.5) * 40;
-    bot.x = Math.max(100, Math.min(1100, bot.x + dx));
-    bot.y = Math.max(100, Math.min(700, bot.y + dy));
+// ================= MAP DATA & BOT NAVIGATION WAYPOINTS =================
+const MAP_TASK_COORDINATES = {
+  card_swipe: { x: 140, y: 150, room: 'الاستقبال' },
+  hr_stamp: { x: 1180, y: 180, room: 'مكتب المدير' },
+  trash_empty: { x: 520, y: 390, room: 'الممر الرئيسي' },
+  router: { x: 120, y: 580, room: 'أوضة السيرفرات' },
+  water_cooler: { x: 1280, y: 580, room: 'البوفيه' },
+  air_conditioner: { x: 880, y: 390, room: 'الممر الرئيسي' },
+  sanitize_hands: { x: 200, y: 240, room: 'الاستقبال' },
+  light_switch: { x: 350, y: 390, room: 'الممر الرئيسي' },
+  wires: { x: 260, y: 640, room: 'أوضة السيرفرات' },
+  printer_jam: { x: 300, y: 180, room: 'الاستقبال' },
+  budget: { x: 920, y: 720, room: 'قسم الماركتنج' },
+  bugs: { x: 320, y: 840, room: 'أوضة السيرفرات' },
+  coffee: { x: 1220, y: 680, room: 'البوفيه', isVisual: 'coffee_steam' },
+  stapler: { x: 1090, y: 140, room: 'مكتب المدير' },
+  sticky_notes: { x: 620, y: 570, room: 'قسم الديزاين' },
+  shred_secrets: { x: 1280, y: 240, room: 'مكتب المدير' },
+  backup_download: { x: 150, y: 690, room: 'أوضة السيرفرات' },
+  data_upload: { x: 880, y: 180, room: 'قاعة الاجتماعات' },
+  tea_buffet: { x: 1140, y: 760, room: 'البوفيه' },
+  deliver_tea: { x: 500, y: 220, room: 'قاعة الاجتماعات' },
+  invoice_start: { x: 820, y: 800, room: 'قسم الماركتنج' },
+  invoice_ceo: { x: 1240, y: 120, room: 'مكتب المدير' },
+  projector_cable: { x: 250, y: 790, room: 'أوضة السيرفرات' },
+  projector_screen: { x: 680, y: 110, room: 'قاعة الاجتماعات' },
+  koshary_pickup: { x: 80, y: 220, room: 'الاستقبال' },
+  koshary_distribute: { x: 1160, y: 840, room: 'البوفيه' },
+  dual_breaker_a: { x: 310, y: 710, room: 'أوضة السيرفرات' },
+  dual_breaker_b: { x: 120, y: 90, room: 'الاستقبال' },
+  special_bashmohandes: { x: 260, y: 550, room: 'أوضة السيرفرات', isVisual: 'server_glow' },
+  special_pablo: { x: 500, y: 620, room: 'قسم الديزاين' },
+  special_samaool: { x: 650, y: 750, room: 'قسم الديزاين' },
+  special_musa: { x: 840, y: 600, room: 'قسم الماركتنج' },
+  special_abdelmonem: { x: 580, y: 820, room: 'قسم الديزاين' },
+  special_shatlawi: { x: 130, y: 850, room: 'أوضة السيرفرات' }
+};
+
+const MAP_VENTS = [
+  { id: 'vent_meeting', x: 470, y: 90, connectsTo: ['vent_servers', 'vent_buffet'] },
+  { id: 'vent_servers', x: 90, y: 550, connectsTo: ['vent_meeting', 'vent_ceo'] },
+  { id: 'vent_ceo', x: 1290, y: 90, connectsTo: ['vent_servers', 'vent_buffet'] },
+  { id: 'vent_buffet', x: 1300, y: 840, connectsTo: ['vent_meeting', 'vent_ceo'] }
+];
+
+function getRoomNameAt(x, y) {
+  if (y < 330) {
+    if (x < 380) return 'الاستقبال';
+    if (x > 1000) return 'مكتب المدير';
+    return 'قاعة الاجتماعات';
+  } else if (y <= 480) {
+    return 'الممر الرئيسي';
+  } else {
+    if (x < 420) return 'أوضة السيرفرات والـ IT';
+    if (x < 760) return 'قسم الديزاين';
+    if (x < 1060) return 'قسم الماركتنج';
+    return 'البوفيه';
+  }
+}
+
+// Hallway-aware smart movement
+function moveBotTowards(room, bot, targetX, targetY, speed = 120) {
+  let intermediateX = targetX;
+  let intermediateY = targetY;
+
+  const currentZone = bot.y < 340 ? 'TOP' : (bot.y > 480 ? 'BOTTOM' : 'HALL');
+  const targetZone = targetY < 340 ? 'TOP' : (targetY > 480 ? 'BOTTOM' : 'HALL');
+
+  // If crossing between top rooms and bottom rooms, route through central hallway (y=410)
+  if (currentZone === 'TOP' && targetZone === 'BOTTOM') {
+    if (bot.y < 370) {
+      intermediateX = bot.x;
+      intermediateY = 410;
+    }
+  } else if (currentZone === 'BOTTOM' && targetZone === 'TOP') {
+    if (bot.y > 450) {
+      intermediateX = bot.x;
+      intermediateY = 410;
+    }
+  }
+
+  const dx = intermediateX - bot.x;
+  const dy = intermediateY - bot.y;
+  const dist = Math.hypot(dx, dy);
+
+  if (dist > 6) {
+    const step = Math.min(dist, speed);
+    const vx = (dx / dist) * step;
+    const vy = (dy / dist) * step;
+    bot.x += vx;
+    bot.y += vy;
     bot.dir = dx >= 0 ? 'right' : 'left';
 
     io.to(room.code).emit('player_moved', {
       id: bot.id,
-      x: bot.x,
-      y: bot.y,
-      vx: dx,
-      vy: dy,
+      x: Math.round(bot.x),
+      y: Math.round(bot.y),
+      vx: Math.round(vx),
+      vy: Math.round(vy),
       dir: bot.dir
     });
   }
+}
 
-  // Bot Saboteur Kill Logic
-  if (bot.role === 'SABOTEUR' && bot.killCooldown <= 0) {
-    const victims = Array.from(room.players.values()).filter(p => p.isAlive && p.id !== bot.id && p.role !== 'SABOTEUR');
-    for (const victim of victims) {
-      const dist = Math.hypot(bot.x - victim.x, bot.y - victim.y);
-      if (dist < 70) {
-        // Kill victim!
-        executeKill(room, bot, victim);
-        break;
+// ================= SMART BOT AI LOOP =================
+function updateBotAI(room, bot) {
+  if (!bot.isAlive || room.state !== 'PLAYING') return;
+
+  // Initialize bot memory & AI state if missing
+  if (!bot.memory) {
+    bot.memory = { sawKills: [], sawBodies: [], trusted: [], lastAccused: null };
+  }
+  if (!bot.aiState) bot.aiState = 'IDLE';
+
+  // 1. VISION CHECK: Detect un-reported Dead Bodies nearby (< 130px)
+  if (room.bodies && room.bodies.length > 0) {
+    for (const body of room.bodies) {
+      const dist = Math.hypot(bot.x - body.x, bot.y - body.y);
+      if (dist < 130) {
+        // Bot spotted a body! Trigger emergency meeting
+        startEmergencyMeeting(room, bot, 'REPORT', body);
+        return;
       }
     }
   }
 
-  // Bot Employee Task completion simulation
-  if (bot.role === 'EMPLOYEE' && Math.random() < 0.05) {
-    const uncompleted = bot.tasks.filter(t => !t.completed);
-    if (uncompleted.length > 0) {
-      const task = uncompleted[Math.floor(Math.random() * uncompleted.length)];
-      if (task.totalStages > 1 && task.stage < task.totalStages) {
-        task.stage++;
-        const nextStage = task.stages[task.stage - 1];
-        task.name = nextStage.name;
-        task.stationId = nextStage.stationId;
-        task.room = nextStage.room;
-        task.roomName = nextStage.roomName;
+  // 2. EMPLOYEE BOT AI
+  if (bot.role === 'EMPLOYEE') {
+    // Priority A: If witnessed a kill, panic and run to emergency button table (700, 210)!
+    if (bot.memory.sawKills.length > 0) {
+      const distToButton = Math.hypot(bot.x - 700, bot.y - 210);
+      if (distToButton < 50) {
+        startEmergencyMeeting(room, bot, 'EMERGENCY');
+        return;
       } else {
-        task.completed = true;
-        room.completedTasksCount++;
-        room.tasksProgress = Math.min(100, Math.round((room.completedTasksCount / Math.max(1, room.totalTasksCount)) * 100));
-        io.to(room.code).emit('tasks_updated', { progress: room.tasksProgress });
+        moveBotTowards(room, bot, 700, 210, 150);
+        return;
+      }
+    }
+
+    // Priority B: If a Sabotage is active, go fix it!
+    if (room.sabotage.active) {
+      let targetConsole = { x: 700, y: 410 }; // lights
+      if (room.sabotage.active === 'server') targetConsole = { x: 230, y: 850 };
+      if (room.sabotage.active === 'ac') targetConsole = { x: 1200, y: 410 };
+
+      const dist = Math.hypot(bot.x - targetConsole.x, bot.y - targetConsole.y);
+      if (dist < 50) {
+        // Fix sabotage
+        room.sabotage = { active: null, timer: 0, fixedBy: [] };
+        io.to(room.code).emit('sabotage_fixed', { fixedBy: bot.name });
+        io.to(room.code).emit('chat_message', {
+          senderId: bot.id,
+          senderName: bot.name,
+          character: bot.character,
+          text: '🔧 صلحت العطل يا شباب، كملوا تاسكاتكم!'
+        });
+        return;
+      } else {
+        moveBotTowards(room, bot, targetConsole.x, targetConsole.y, 140);
+        return;
+      }
+    }
+
+    // Priority C: Task Seeking & Working
+    if (bot.aiState === 'WORKING') {
+      bot.actionTimer = (bot.actionTimer || 3) - 1;
+      if (bot.actionTimer <= 0) {
+        // Complete current task stage or task
+        const currentTask = bot.tasks?.find(t => t.id === bot.currentTargetStationId || !t.completed);
+        if (currentTask) {
+          if (currentTask.totalStages > 1 && currentTask.stage < currentTask.totalStages) {
+            currentTask.stage++;
+            const nextStage = currentTask.stages[currentTask.stage - 1];
+            currentTask.name = nextStage.name;
+            currentTask.stationId = nextStage.stationId;
+            currentTask.room = nextStage.room;
+            currentTask.roomName = nextStage.roomName;
+          } else {
+            currentTask.completed = true;
+            room.completedTasksCount++;
+            room.tasksProgress = Math.min(100, Math.round((room.completedTasksCount / Math.max(1, room.totalTasksCount)) * 100));
+            io.to(room.code).emit('tasks_updated', { progress: room.tasksProgress });
+
+            // If visual task, emit visual FX so humans witness innocence!
+            const stationData = MAP_TASK_COORDINATES[currentTask.stationId];
+            if (stationData && stationData.isVisual) {
+              io.to(room.code).emit('visual_task_triggered', {
+                playerId: bot.id,
+                playerName: bot.name,
+                taskType: stationData.isVisual,
+                x: bot.x,
+                y: bot.y
+              });
+            }
+          }
+        }
+        bot.aiState = 'IDLE';
+        bot.currentTargetStationId = null;
+      }
+      return;
+    }
+
+    // Seeking next task
+    const uncompleted = bot.tasks?.filter(t => !t.completed) || [];
+    if (uncompleted.length > 0) {
+      const nextTask = uncompleted[0];
+      bot.currentTargetStationId = nextTask.stationId;
+      const targetCoords = MAP_TASK_COORDINATES[nextTask.stationId] || { x: 500, y: 400 };
+
+      const dist = Math.hypot(bot.x - targetCoords.x, bot.y - targetCoords.y);
+      if (dist < 45) {
+        bot.aiState = 'WORKING';
+        bot.actionTimer = Math.floor(Math.random() * 3) + 3; // 3 to 5 seconds
+      } else {
+        moveBotTowards(room, bot, targetCoords.x, targetCoords.y, 110);
+      }
+    } else {
+      // All tasks done: wander politely between rooms
+      if (Math.random() < 0.2) {
+        const randomStations = Object.values(MAP_TASK_COORDINATES);
+        const rand = randomStations[Math.floor(Math.random() * randomStations.length)];
+        moveBotTowards(room, bot, rand.x, rand.y, 90);
       }
     }
   }
+
+  // 3. SABOTEUR BOT AI (Sneaky Stalking, Isolated Kills, Venting & Faking)
+  else if (bot.role === 'SABOTEUR') {
+    // A: Look for isolated victim if kill cooldown is ready
+    if (bot.killCooldown <= 0) {
+      const livingEmployees = Array.from(room.players.values()).filter(p => p.isAlive && p.id !== bot.id && p.role !== 'SABOTEUR');
+      
+      // Find victim with fewest witnesses
+      let bestVictim = null;
+      let minWitnesses = 999;
+
+      for (const emp of livingEmployees) {
+        const witnesses = livingEmployees.filter(other => other.id !== emp.id && Math.hypot(other.x - emp.x, other.y - emp.y) < 220);
+        if (witnesses.length < minWitnesses) {
+          minWitnesses = witnesses.length;
+          bestVictim = emp;
+        }
+      }
+
+      if (bestVictim) {
+        const dist = Math.hypot(bot.x - bestVictim.x, bot.y - bestVictim.y);
+        if (dist < 65) {
+          // Execute isolated kill!
+          executeKill(room, bot, bestVictim);
+
+          // Vent away to escape!
+          const nearestVent = MAP_VENTS.find(v => Math.hypot(bot.x - v.x, bot.y - v.y) < 220);
+          if (nearestVent) {
+            const destVentId = nearestVent.connectsTo[Math.floor(Math.random() * nearestVent.connectsTo.length)];
+            const dest = MAP_VENTS.find(v => v.id === destVentId);
+            if (dest) {
+              bot.x = dest.x;
+              bot.y = dest.y;
+              io.to(room.code).emit('player_moved', { id: bot.id, x: bot.x, y: bot.y, vx: 0, vy: 0, dir: bot.dir });
+            }
+          }
+          return;
+        } else {
+          // Stalk victim
+          moveBotTowards(room, bot, bestVictim.x, bestVictim.y, 130);
+          return;
+        }
+      }
+    }
+
+    // B: If on cooldown or no isolated targets, fake tasks & occasionally trigger sabotage
+    if (Math.random() < 0.08 && !room.sabotage.active) {
+      // Trigger random sabotage
+      const types = ['lights', 'server', 'ac'];
+      const sabType = types[Math.floor(Math.random() * types.length)];
+      triggerSabotage(room, sabType);
+    }
+
+    // Fake task navigation
+    if (!bot.targetStation || Math.random() < 0.05) {
+      const keys = Object.keys(MAP_TASK_COORDINATES);
+      bot.targetStation = keys[Math.floor(Math.random() * keys.length)];
+    }
+    const coords = MAP_TASK_COORDINATES[bot.targetStation];
+    if (coords) {
+      const dist = Math.hypot(bot.x - coords.x, bot.y - coords.y);
+      if (dist > 45) {
+        moveBotTowards(room, bot, coords.x, coords.y, 95);
+      }
+    }
+  }
+}
+
+function triggerSabotage(room, type) {
+  if (room.sabotage.active || room.state !== 'PLAYING') return;
+
+  room.sabotage.active = type;
+  room.sabotage.fixedBy = [];
+
+  let desc = 'عطل في شبكة الإضاءة والكهرباء!';
+  if (type === 'server') {
+    room.sabotage.timer = 40;
+    desc = '⚠️ انهيار في سيرفر الشركة الرئيسي! أصلح السيرفر قبل 40 ثانية وإلا ستفلس الشركة!';
+  } else if (type === 'ac') {
+    desc = '❄️ عطل في التكييف المركزي! حرارة المكتب أبطأت حركة الموظفين 40%!';
+  }
+
+  io.to(room.code).emit('sabotage_triggered', {
+    type: type,
+    desc: desc,
+    timer: room.sabotage.timer
+  });
 }
 
 function executeKill(room, killer, victim) {
@@ -796,8 +1057,24 @@ function executeKill(room, killer, victim) {
     deadBody: deadBody
   });
 
-  io.to(room.code).emit('room_updated', getSanitizedRoom(room));
+  // Check if any nearby living employee saw the kill!
+  const killerRoom = getRoomNameAt(deadBody.x, deadBody.y);
+  room.players.forEach(p => {
+    if (p.isAlive && p.id !== killer.id && p.id !== victim.id && p.role === 'EMPLOYEE') {
+      const dist = Math.hypot(p.x - deadBody.x, p.y - deadBody.y);
+      if (dist < 240) {
+        if (!p.memory) p.memory = { sawKills: [], sawBodies: [], trusted: [], lastAccused: null };
+        p.memory.sawKills.push({
+          killerId: killer.id,
+          killerName: killer.name,
+          victimName: victim.name,
+          roomName: killerRoom
+        });
+      }
+    }
+  });
 
+  io.to(room.code).emit('room_updated', getSanitizedRoom(room));
   checkWinConditions(room);
 }
 
@@ -832,6 +1109,113 @@ function checkWinConditions(room) {
     endGame(room, 'EMPLOYEES', 'الشركة سلمت البروجكت والعميل دفع! تم إنجاز كل التاسكات قبل الديدلاين! 🚀');
     return;
   }
+}
+
+// ================= DYNAMIC BOT MEETING DISCUSSIONS & REASONING =================
+function generateBotMeetingChat(room, bot) {
+  const charId = bot.character || 'bashmohandes';
+  const isSaboteur = bot.role === 'SABOTEUR';
+  const botRoom = getRoomNameAt(bot.x, bot.y);
+
+  // 1. If bot saw a kill: 100% explosive accusation
+  if (bot.memory && bot.memory.sawKills && bot.memory.sawKills.length > 0) {
+    const kill = bot.memory.sawKills[0];
+    return `🚨 يا جدعان أقسم بالله أنا شوفت [${kill.killerName}] بيشحور [${kill.victimName}] في [${kill.roomName}] قدام عيني! صوّتوا عليه وخلصونا!`;
+  }
+
+  // 2. If bot reported the body:
+  if (room.meeting.reason === 'REPORT' && room.meeting.deadBody && room.meeting.caller === bot.name) {
+    const bodyRoom = getRoomNameAt(room.meeting.deadBody.x, room.meeting.deadBody.y);
+    return `😱 أنا دخلت [${bodyRoom}] لقيت جثة [${room.meeting.deadBody.victimName}] مرمية على الأرض! مين اللي كان قريب من هناك؟`;
+  }
+
+  // 3. If someone is accusing a trusted friend who did visual task:
+  if (bot.memory && bot.memory.trusted && bot.memory.trusted.length > 0) {
+    const trustedId = bot.memory.trusted[0];
+    const trustedPlayer = room.players.get(trustedId);
+    if (trustedPlayer && Math.random() < 0.5) {
+      return `✨ يا جماعة [${trustedPlayer.name}] بريء 100% وموظف شريف، أنا شفته بعيني بيعمل تاسك بصري والبخار والأنوار طلعت!`;
+    }
+  }
+
+  // 4. If bot is Saboteur defending or deflecting:
+  if (isSaboteur) {
+    const alibiRooms = ['البوفيه', 'الاستقبال', 'قسم الماركتنج', 'قسم الديزاين', 'مكتب المدير'];
+    const fakeRoom = alibiRooms[Math.floor(Math.random() * alibiRooms.length)];
+    const excuses = [
+      `والله العظيم مظلوم ومفتريين! أنا كنت في [${fakeRoom}] مخلص تاسكاتي ومشوفتش حد!`,
+      `يا جماعة هترموا التهمة عليا والديدلاين هيضيع والشركة هتفلس؟ ركزوا في اللي بيجري!`,
+      `أنا لسه مصلح السيرفر ومكنتش هناك خالص! اسألوا الناس اللي كانت معايا!`
+    ];
+    return excuses[Math.floor(Math.random() * excuses.length)];
+  }
+
+  // 5. Personality Slang:
+  const personalityLines = {
+    bashmohandes: [
+      `اللوجز عندي واضحة والسيرفر رصد حركة مريبة في ${botRoom}!`,
+      `يا جماعة بلاش تصويت عشوائي، مين معاه إثبات أو شاف حد بيجري؟`,
+      `أنا كنت متبّع الكود والتاسكات مظبوطة، مين اللي مخلصش ديدلاينه؟`
+    ],
+    pablo: [
+      `يا جدعان مش وقت هري، العميل مستني البوستر 1080x1080 وأنا عيني طلعت في الديزاين!`,
+      `أنا شوفت حد بيتحرك بسرعة جهة السيرفرات وكان مريب جداً!`,
+      `هنصوّت على مين ونخلص عشان ألحق أسلّم الشغل؟`
+    ],
+    samaool: [
+      `حاستي السادسة ومناخيري شامين ريحة خيانة مش مريحة في ${botRoom}!`,
+      `أنا مفرّغ خلفية اللوجو بـ Pen Tool على الفرازة، وعيني على كل الموظفين!`,
+      `اللي مبيعملش تاسكات هو المخرّب، باينة زي الشمس!`
+    ],
+    musa: [
+      `أنا باصم بالعشرة إنه المخرّب، ارموه بره الشركة وأنا المسؤول عن تارجت المبيعات!`,
+      `الحملة الإعلانية شغالة بـ 50 ألف وصول ومش هسمح لعميل يبوّظ مجهودنا!`,
+      `صوّتوا عليه بسرعة خلينا نلحق الوقت!`
+    ],
+    abdelmonem: [
+      `أنا أصغر واحد في التيم وغلبان، والله كنت بصدّر أيقونات الـ SVG في أمان الله!`,
+      `يا باشا أنا شوفت حركة سريعة في الممر بس لحقت نفسي وجريت!`,
+      `سكيب يا جماعة عشان منلبسش حد مظلوم!`
+    ],
+    shatlawi: [
+      `يا جماعة سيبوني ألحق رندر الفيديو 4K قبل ما أموت! البريمير بيهنج!`,
+      `أنا كنت في أوضة المونتاج مركز في التايم لاين ومشوفتش حاجة!`,
+      `مين اللي قطع النور وعطّل الرندر يا جدعان؟`
+    ]
+  };
+
+  const list = personalityLines[charId] || personalityLines.bashmohandes;
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+function getBotVoteTarget(room, bot) {
+  // 1. If saw a kill: 100% vote for killer
+  if (bot.memory && bot.memory.sawKills && bot.memory.sawKills.length > 0) {
+    const killerId = bot.memory.sawKills[0].killerId;
+    const killer = room.players.get(killerId);
+    if (killer && killer.isAlive) {
+      return killerId;
+    }
+  }
+
+  // 2. If bot is Saboteur: vote for living employee or skip
+  if (bot.role === 'SABOTEUR') {
+    const livingEmployees = Array.from(room.players.values()).filter(p => p.isAlive && p.id !== bot.id && p.role !== 'SABOTEUR');
+    if (livingEmployees.length > 0 && Math.random() < 0.75) {
+      return livingEmployees[Math.floor(Math.random() * livingEmployees.length)].id;
+    }
+    return 'SKIP';
+  }
+
+  // 3. If bot is employee without direct witness: never vote for trusted players
+  const suspectCandidates = Array.from(room.players.values()).filter(p => {
+    return p.isAlive && p.id !== bot.id && (!bot.memory || !bot.memory.trusted || !bot.memory.trusted.includes(p.id));
+  });
+
+  if (suspectCandidates.length > 0 && Math.random() < 0.65) {
+    return suspectCandidates[Math.floor(Math.random() * suspectCandidates.length)].id;
+  }
+  return 'SKIP';
 }
 
 function startEmergencyMeeting(room, caller, reason, deadBody = null) {
@@ -869,26 +1253,41 @@ function startEmergencyMeeting(room, caller, reason, deadBody = null) {
     }))
   });
 
+  // Opening meeting statement from caller or first available bot
+  const livingBots = Array.from(room.players.values()).filter(p => p.isBot && p.isAlive);
+  if (livingBots.length > 0) {
+    const speakerBot = livingBots.find(b => b.name === room.meeting.caller) || livingBots[0];
+    const initialBark = generateBotMeetingChat(room, speakerBot);
+    setTimeout(() => {
+      io.to(room.code).emit('chat_message', {
+        senderId: speakerBot.id,
+        senderName: speakerBot.name,
+        character: speakerBot.character,
+        text: initialBark
+      });
+    }, 400);
+  }
+
   if (room.meeting.intervalId) clearInterval(room.meeting.intervalId);
   room.meeting.intervalId = setInterval(() => {
     room.meeting.timer--;
 
-    // Simulate bot chat & votes randomly during meeting
-    const livingBots = Array.from(room.players.values()).filter(p => p.isBot && p.isAlive && !p.hasVoted);
-    if (livingBots.length > 0 && Math.random() < 0.4) {
-      const bot = livingBots[Math.floor(Math.random() * livingBots.length)];
-      // Bot chat bark
-      const slang = BOT_SLANG_CHAT[Math.floor(Math.random() * BOT_SLANG_CHAT.length)];
+    // Dynamic Bot Discussions & Logical Voting during Meeting
+    const eligibleBots = Array.from(room.players.values()).filter(p => p.isBot && p.isAlive && !p.hasVoted);
+    if (eligibleBots.length > 0 && Math.random() < 0.75) {
+      const bot = eligibleBots[Math.floor(Math.random() * eligibleBots.length)];
+      
+      // Generate intelligent contextual chat
+      const chatLine = generateBotMeetingChat(room, bot);
       io.to(room.code).emit('chat_message', {
         senderId: bot.id,
         senderName: bot.name,
         character: bot.character,
-        text: slang
+        text: chatLine
       });
 
-      // Bot cast vote
-      const livingPlayers = Array.from(room.players.values()).filter(p => p.isAlive && p.id !== bot.id);
-      const voteTarget = Math.random() < 0.35 ? 'SKIP' : (livingPlayers[Math.floor(Math.random() * livingPlayers.length)]?.id || 'SKIP');
+      // Calculate intelligent vote target
+      const voteTarget = getBotVoteTarget(room, bot);
       castVote(room, bot.id, voteTarget);
     }
 
@@ -944,8 +1343,6 @@ function concludeMeeting(room) {
   tally.forEach((count, id) => {
     if (count > maxVotes) {
       maxVotes = count;
-      ejectedId = id;
-      isTie = false;
     } else if (count === maxVotes && count > 0) {
       isTie = true;
       ejectedId = null;
