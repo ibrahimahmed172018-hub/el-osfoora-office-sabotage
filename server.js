@@ -1075,6 +1075,7 @@ io.on('connection', (socket) => {
 
     currentRoomCode = code;
     socket.join(code);
+    socket.emit('room_joined', getSanitizedRoom(room));
     io.to(code).emit('room_updated', getSanitizedRoom(room));
   });
 

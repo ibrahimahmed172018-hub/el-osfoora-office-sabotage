@@ -77,8 +77,9 @@ class GameUI {
       window.showGameAlert('تعذر الاتصال بسيرفر اللعبة. افتح رابط Railway الصحيح.', 'error', 6000);
     });
 
-    // Room Created / Updated
+    // Room Created / Joined / Updated
     this.socket.on('room_created', (room) => this.handleRoomJoined(room, true));
+    this.socket.on('room_joined', (room) => this.handleRoomJoined(room, false));
     this.socket.on('room_updated', (room) => this.handleRoomUpdated(room));
     this.socket.on('error_message', (msg) => window.showGameAlert(msg, 'error'));
 
@@ -184,7 +185,7 @@ class GameUI {
     });
 
     // Join Room
-    document.getElementById('btn-join-room').addEventListener('click', () => {
+    const handleJoin = () => {
       const code = document.getElementById('room-code-input').value.trim();
       const name = document.getElementById('player-name-input').value.trim() || 'موظف غلبان';
       if (!code) {
@@ -192,6 +193,11 @@ class GameUI {
         return;
       }
       this.socket.emit('join_room', { roomCode: code, playerName: name, character: this.selectedCharId });
+    };
+
+    document.getElementById('btn-join-room').addEventListener('click', handleJoin);
+    document.getElementById('room-code-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleJoin();
     });
 
     // Add Bot
@@ -356,14 +362,22 @@ class GameUI {
 
   handleRoomUpdated(room) {
     this.currentRoom = room;
-    this.renderWaitingRoom(room);
 
-    // If game is playing, update others in phaser
-    if (room.state === 'PLAYING' && window.phaserGame) {
-      const scene = window.phaserGame.scene.keys['OfficeScene'];
-      if (scene) {
-        scene.updateOtherPlayers(room.players);
-        scene.updateDeadBodies(room.bodies);
+    if (room.state === 'LOBBY') {
+      document.getElementById('lobby-screen').classList.add('hidden');
+      document.getElementById('room-lobby-screen').classList.remove('hidden');
+      document.getElementById('display-room-code').innerText = room.code;
+      document.getElementById('hud-room-code').innerText = room.code;
+      this.renderWaitingRoom(room);
+    } else if (room.state === 'PLAYING') {
+      document.getElementById('lobby-screen').classList.add('hidden');
+      document.getElementById('room-lobby-screen').classList.add('hidden');
+      if (window.phaserGame) {
+        const scene = window.phaserGame.scene.keys['OfficeScene'];
+        if (scene) {
+          scene.updateOtherPlayers(room.players);
+          scene.updateDeadBodies(room.bodies);
+        }
       }
     }
   }
@@ -424,7 +438,8 @@ class GameUI {
     this.isSaboteur = data.isSaboteur;
     this.assignedTasks = data.tasks || [];
 
-    // Hide waiting screen
+    // Explicitly hide all pre-game screen overlays
+    document.getElementById('lobby-screen').classList.add('hidden');
     document.getElementById('room-lobby-screen').classList.add('hidden');
 
     // Show Role Reveal Screen for 4.5 seconds
