@@ -176,12 +176,14 @@ body, html {
 
 /* ================= 1. LOBBY SCREEN ================= */
 .lobby-card {
-  width: 90%;
-  max-width: 880px;
-  max-height: 92vh;
+  width: min(94vw, 840px);
+  max-height: min(92vh, 760px);
+  max-height: min(92dvh, 760px);
   overflow-y: auto;
-  padding: 30px 40px;
+  overscroll-behavior: contain;
+  padding: clamp(16px, 3.5vw, 36px);
   border-top: 4px solid var(--color-primary);
+  box-sizing: border-box;
 }
 
 .lobby-header {
@@ -346,10 +348,14 @@ body, html {
 
 /* ================= 2. WAITING ROOM ================= */
 .waiting-card {
-  width: 90%;
-  max-width: 780px;
-  padding: 35px 40px;
+  width: min(94vw, 780px);
+  max-height: min(92vh, 760px);
+  max-height: min(92dvh, 760px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: clamp(16px, 3.5vw, 36px);
   text-align: center;
+  box-sizing: border-box;
 }
 .waiting-header h2 {
   font-size: 1.8rem;
@@ -461,10 +467,14 @@ body, html {
 
 /* ================= 3. ROLE REVEAL ================= */
 .role-card-anim {
-  width: 90%;
-  max-width: 520px;
-  padding: 40px 30px;
+  width: min(92vw, 480px);
+  max-height: min(90vh, 650px);
+  max-height: min(90dvh, 650px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: clamp(20px, 4vw, 36px);
   text-align: center;
+  box-sizing: border-box;
   animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 @keyframes popIn {
@@ -924,6 +934,7 @@ body, html {
   bottom: 0;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   z-index: 2000;
   background: rgba(5, 10, 18, 0.88);
   backdrop-filter: blur(12px);
@@ -931,6 +942,9 @@ body, html {
   display: flex;
   justify-content: center;
   align-items: center;
+  padding: clamp(8px, 2vw, 20px);
+  box-sizing: border-box;
+  overflow-y: auto;
   pointer-events: auto;
 }
 
@@ -938,12 +952,58 @@ body, html {
 .task-box {
   position: relative;
   z-index: 2001;
-  width: 90%;
-  max-width: 620px;
-  max-height: 90vh;
+  width: min(94vw, 560px);
+  max-height: min(88vh, 720px);
+  max-height: min(88dvh, 720px);
   overflow-y: auto;
-  padding: 25px 30px;
+  overscroll-behavior: contain;
+  padding: clamp(14px, 3vw, 24px);
+  margin: auto;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   animation: modalPopIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Custom Sleek Scrollbar for all scrollable modals */
+.modal-card::-webkit-scrollbar,
+.task-box::-webkit-scrollbar,
+.lobby-card::-webkit-scrollbar,
+.waiting-card::-webkit-scrollbar,
+.meeting-card::-webkit-scrollbar,
+.meeting-layout::-webkit-scrollbar,
+.hud-tasks-list::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.modal-card::-webkit-scrollbar-track,
+.task-box::-webkit-scrollbar-track,
+.lobby-card::-webkit-scrollbar-track,
+.waiting-card::-webkit-scrollbar-track,
+.meeting-card::-webkit-scrollbar-track,
+.meeting-layout::-webkit-scrollbar-track,
+.hud-tasks-list::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 4px;
+}
+.modal-card::-webkit-scrollbar-thumb,
+.task-box::-webkit-scrollbar-thumb,
+.lobby-card::-webkit-scrollbar-thumb,
+.waiting-card::-webkit-scrollbar-thumb,
+.meeting-card::-webkit-scrollbar-thumb,
+.meeting-layout::-webkit-scrollbar-thumb,
+.hud-tasks-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 102, 0, 0.5);
+  border-radius: 4px;
+}
+.modal-card::-webkit-scrollbar-thumb:hover,
+.task-box::-webkit-scrollbar-thumb:hover,
+.lobby-card::-webkit-scrollbar-thumb:hover,
+.waiting-card::-webkit-scrollbar-thumb:hover,
+.meeting-card::-webkit-scrollbar-thumb:hover,
+.meeting-layout::-webkit-scrollbar-thumb:hover,
+.hud-tasks-list::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary);
 }
 
 @keyframes modalPopIn {
@@ -2088,12 +2148,15 @@ body, html {
 
 /* ================= 8. EMERGENCY MEETING SCREEN ================= */
 .meeting-card {
-  width: 92%;
-  max-width: 960px;
-  height: 88vh;
-  padding: 25px 30px;
+  width: min(96vw, 960px);
+  max-height: min(92vh, 780px);
+  max-height: min(92dvh, 780px);
+  padding: clamp(14px, 2.5vw, 28px);
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
 }
 
 .meeting-header {
@@ -2497,15 +2560,83 @@ body, html {
     font-size: 0.85rem;
   }
   .router-device {
-    padding: 10px;
+    padding: 12px;
     margin: 10px auto;
   }
   .code-terminal {
-    padding: 8px;
+    padding: 10px;
   }
   .bugs-grid {
     height: 180px;
     gap: 8px;
+  }
+
+  /* Wires Patch Panel Mobile */
+  .patch-panel {
+    min-height: 170px;
+    padding: 10px 14px;
+    margin: 10px 0;
+  }
+  .wire-node {
+    width: 34px;
+    height: 34px;
+    font-size: 0.8rem;
+  }
+  .wire-ports-col {
+    gap: 10px;
+  }
+
+  /* Card Scanner Mobile */
+  .card-scanner-machine {
+    padding: 12px;
+    margin: 10px auto;
+  }
+  .card-slot-track {
+    height: 80px;
+  }
+  .company-id-card {
+    width: 120px;
+    height: 65px;
+    padding: 6px;
+    font-size: 0.7rem;
+  }
+
+  /* Documents & Stamps Mobile */
+  .paper-document, .contract-paper, .secret-doc-box {
+    padding: 12px 14px;
+    margin: 10px auto;
+  }
+  .stamp-slot {
+    width: 110px;
+    height: 60px;
+    font-size: 0.7rem;
+  }
+  .staple-slot {
+    width: 80px;
+    height: 50px;
+    font-size: 0.7rem;
+  }
+
+  /* Kanban Board Mobile */
+  .kanban-board {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .kanban-col {
+    min-height: 120px;
+    padding: 8px 10px;
+  }
+
+  /* AC, Cooler, Sanitizer, Shredder Mobile */
+  .ac-remote-box, .sanitizer-bottle, .shredder-bin, .cooler-machine, .transfer-computer {
+    padding: 12px;
+    margin: 8px auto;
+  }
+  .ac-temp {
+    font-size: 1.8rem;
+  }
+  .shredder-lever-track {
+    height: 90px;
   }
 
   /* Meeting Screen Mobile */

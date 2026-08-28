@@ -60,16 +60,45 @@ class OfficeScene extends Phaser.Scene {
     this.darknessOverlay.setDepth(50);
     this.darknessOverlay.setVisible(false);
 
-    // Camera Settings
+    // Dynamic Camera Settings & Responsive Zoom
     this.cameras.main.setBounds(0, 0, OFFICE_MAP_DATA.width, OFFICE_MAP_DATA.height);
-    this.cameras.main.setZoom(1.1);
+    this.updateCameraViewport();
+
+    // Listen for screen resize and orientation change
+    this.scale.on('resize', () => this.updateCameraViewport());
+    window.addEventListener('resize', () => this.updateCameraViewport());
 
     // Key press listeners
     this.wasd.use.on('down', () => this.handleUseAction());
     this.wasd.kill.on('down', () => this.handleKillAction());
     this.wasd.report.on('down', () => this.handleReportAction());
 
-    console.log('Office Scene Initialized');
+    console.log('Office Scene Initialized with Dynamic Responsive Scaling');
+  }
+
+  calculateOptimalZoom() {
+    const w = window.innerWidth || this.scale.width;
+    const h = window.innerHeight || this.scale.height;
+    const minDim = Math.min(w, h);
+    
+    // Dynamic responsive zoom based on device screen size and aspect ratio
+    if (minDim < 500) {
+      return 1.45; // Small mobile phones (portrait/landscape) -> zoom close for crystal clear view!
+    } else if (minDim < 768) {
+      return 1.35; // Large phones / Phablets
+    } else if (minDim < 1050) {
+      return 1.25; // Tablets / Small Laptops
+    } else if (w > 2000) {
+      return 1.10; // 4K & Ultra-wide displays
+    } else {
+      return 1.20; // Standard 1080p Desktop / Laptops
+    }
+  }
+
+  updateCameraViewport() {
+    if (!this.cameras || !this.cameras.main) return;
+    const zoom = this.calculateOptimalZoom();
+    this.cameras.main.setZoom(zoom);
   }
 
   drawOfficeMap() {
@@ -86,12 +115,14 @@ class OfficeScene extends Phaser.Scene {
       g.lineStyle(2, 0x334155, 0.8);
       g.strokeRoundedRect(r.x, r.y, r.w, r.h, 12);
 
-      // Room Name Text
-      this.add.text(r.x + 15, r.y + 12, r.name, {
+      // Room Name Text - Crisp, Large & Readable
+      this.add.text(r.x + 18, r.y + 14, r.name, {
         fontFamily: 'Tajawal, Cairo',
-        fontSize: '14px',
+        fontSize: '18px',
         fontWeight: 'bold',
-        color: '#94a3b8'
+        color: '#e2e8f0',
+        stroke: '#0f172a',
+        strokeThickness: 4
       }).setDepth(2);
     });
 
@@ -104,9 +135,12 @@ class OfficeScene extends Phaser.Scene {
         g.strokeRoundedRect(obs.x, obs.y, obs.w, obs.h, 8);
 
         this.add.text(obs.x + obs.w / 2, obs.y + obs.h / 2, obs.label, {
-          fontFamily: 'Cairo',
-          fontSize: '11px',
-          color: '#64748b'
+          fontFamily: 'Cairo, Tajawal',
+          fontSize: '13px',
+          fontWeight: 'bold',
+          color: '#94a3b8',
+          stroke: '#0f172a',
+          strokeThickness: 3
         }).setOrigin(0.5).setDepth(2);
       }
     });
@@ -120,22 +154,24 @@ class OfficeScene extends Phaser.Scene {
     g.lineStyle(4, 0xffffff, 1);
     g.strokeCircle(em.x, em.y, em.radius - 8);
 
-    this.add.text(em.x, em.y, '🚨', { fontSize: '26px' }).setOrigin(0.5).setDepth(3);
+    this.add.text(em.x, em.y, '🚨', { fontSize: '32px' }).setOrigin(0.5).setDepth(3);
 
-    // Draw Task Stations
+    // Draw Task Stations - Highly Visible & Vibrant
     OFFICE_MAP_DATA.taskStations.forEach(ts => {
       const marker = this.add.graphics();
-      marker.fillStyle(0x22c55e, 0.2);
-      marker.fillCircle(ts.x, ts.y, 25);
-      marker.lineStyle(2, 0x22c55e, 0.8);
-      marker.strokeCircle(ts.x, ts.y, 25);
+      marker.fillStyle(0x22c55e, 0.25);
+      marker.fillCircle(ts.x, ts.y, 28);
+      marker.lineStyle(3, 0x22c55e, 0.9);
+      marker.strokeCircle(ts.x, ts.y, 28);
 
-      this.add.text(ts.x, ts.y - 5, ts.icon, { fontSize: '20px' }).setOrigin(0.5).setDepth(3);
-      this.add.text(ts.x, ts.y + 20, ts.name, {
-        fontFamily: 'Cairo',
-        fontSize: '10px',
+      this.add.text(ts.x, ts.y - 6, ts.icon, { fontSize: '26px' }).setOrigin(0.5).setDepth(3);
+      this.add.text(ts.x, ts.y + 22, ts.name, {
+        fontFamily: 'Cairo, Tajawal',
+        fontSize: '13px',
         fontWeight: 'bold',
-        color: '#86efac'
+        color: '#86efac',
+        stroke: '#052e16',
+        strokeThickness: 3.5
       }).setOrigin(0.5).setDepth(3);
     });
 
@@ -156,11 +192,14 @@ class OfficeScene extends Phaser.Scene {
 
     // Sabotage Consoles
     OFFICE_MAP_DATA.sabotageConsoles.forEach(sc => {
-      this.add.text(sc.x, sc.y, sc.icon, { fontSize: '24px' }).setOrigin(0.5).setDepth(3);
-      this.add.text(sc.x, sc.y + 22, sc.name, {
-        fontFamily: 'Cairo',
-        fontSize: '10px',
-        color: '#f87171'
+      this.add.text(sc.x, sc.y - 4, sc.icon, { fontSize: '28px' }).setOrigin(0.5).setDepth(3);
+      this.add.text(sc.x, sc.y + 24, sc.name, {
+        fontFamily: 'Cairo, Tajawal',
+        fontSize: '13px',
+        fontWeight: 'bold',
+        color: '#fca5a5',
+        stroke: '#450a0a',
+        strokeThickness: 3.5
       }).setOrigin(0.5).setDepth(3);
     });
   }
@@ -183,14 +222,16 @@ class OfficeScene extends Phaser.Scene {
     const charCanvas = this.add.graphics();
     container.add(charCanvas);
 
-    // Player Name Tag
-    const nameTag = this.add.text(0, -38, playerData.name, {
+    // Player Name Tag - Clear, Bold & Outline
+    const nameTag = this.add.text(0, -42, playerData.name, {
       fontFamily: 'Tajawal, Cairo',
-      fontSize: '12px',
+      fontSize: '14px',
       fontWeight: 'bold',
       color: '#ffffff',
-      backgroundColor: 'rgba(0,0,0,0.6)',
-      padding: { x: 6, y: 2 }
+      stroke: '#000000',
+      strokeThickness: 3.5,
+      backgroundColor: 'rgba(15, 23, 42, 0.85)',
+      padding: { x: 8, y: 3 }
     }).setOrigin(0.5);
     container.add(nameTag);
 
@@ -247,13 +288,15 @@ class OfficeScene extends Phaser.Scene {
         const charCanvas = this.add.graphics();
         container.add(charCanvas);
 
-        const nameTag = this.add.text(0, -38, p.name, {
+        const nameTag = this.add.text(0, -42, p.name, {
           fontFamily: 'Tajawal, Cairo',
-          fontSize: '12px',
+          fontSize: '14px',
           fontWeight: 'bold',
           color: '#ffffff',
-          backgroundColor: 'rgba(0,0,0,0.6)',
-          padding: { x: 6, y: 2 }
+          stroke: '#000000',
+          strokeThickness: 3.5,
+          backgroundColor: 'rgba(15, 23, 42, 0.85)',
+          padding: { x: 8, y: 3 }
         }).setOrigin(0.5);
         container.add(nameTag);
 
@@ -862,10 +905,9 @@ const phaserConfig = {
   type: Phaser.AUTO,
   parent: 'phaser-container',
   scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
-    width: 1280,
-    height: 720
+    mode: Phaser.Scale.RESIZE,
+    width: '100%',
+    height: '100%'
   },
   backgroundColor: '#0a0e17',
   physics: {
