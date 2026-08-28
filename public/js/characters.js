@@ -96,15 +96,15 @@ const CHARACTERS_DATA = {
     title: 'جرافيك ديزاينر بريمو',
     color: '#3498db',
     secondaryColor: '#f1c40f',
-    speed: 180,
-    speedMod: 0.9,
-    bounceParam: 0.85, // High Belly Bounce!
-    knockbackPower: 1.8,
+    speed: 190,
+    speedMod: 1.0,
+    bounceParam: 0.25,
+    knockbackPower: 1.2,
     noseHitbox: 0,
-    specialMove: 'خبطة بالكرش',
-    specialDesc: '',
+    specialMove: 'ضربة الفرشاة الفنية (Paint Splash)',
+    specialDesc: 'رشة ألوان فوتوشوب متفجرة بدوامة ألوان فنية مبهرة',
     taskSpecial: 'عدل البوستر لمقاس 1080x1080',
-    features: '',
+    features: 'تيشرت ديزاينر فني وألوان فوتوشوب مع فرشاة رسم',
     refImage: 'Gemini_Generated_Image_mpgqmompgqmompgq.jpg',
     render: (ctx, x, y, scale = 1, isWalking = false, tick = 0, dir = 'right') => {
       ctx.save();
@@ -113,38 +113,46 @@ const CHARACTERS_DATA = {
       else ctx.scale(scale, scale);
 
       const walkBob = isWalking ? Math.sin(tick * 0.2) * 4 : 0;
-      const bellyWobble = Math.sin(tick * 0.3) * (isWalking ? 6 : 2); // Big Belly wobble!
+      const brushWave = Math.sin(tick * 0.25) * 3;
 
-      // Legs / Cargo Shorts
-      ctx.fillStyle = '#556b2f'; // Olive cargo shorts
-      ctx.fillRect(-16, 12 + walkBob, 14, 14);
-      ctx.fillRect(2, 12 + walkBob, 14, 14);
+      // Legs / Cargo Pants
+      ctx.fillStyle = '#475569'; // Dark Slate Pants
+      ctx.fillRect(-14, 12 + walkBob, 12, 14);
+      ctx.fillRect(2, 12 + walkBob, 12, 14);
 
       // Shoes
       ctx.fillStyle = '#e0a96d';
-      ctx.fillRect(-14, 26 + walkBob, 10, 6);
-      ctx.fillRect(4, 26 + walkBob, 10, 6);
-      ctx.fillStyle = '#3e2723'; // Brown sneakers
-      ctx.fillRect(-16, 32 + walkBob, 14, 6);
-      ctx.fillRect(2, 32 + walkBob, 14, 6);
+      ctx.fillRect(-12, 26 + walkBob, 8, 6);
+      ctx.fillRect(4, 26 + walkBob, 8, 6);
+      ctx.fillStyle = '#1e293b'; // Stylish Sneakers
+      ctx.fillRect(-14, 32 + walkBob, 12, 6);
+      ctx.fillRect(2, 32 + walkBob, 12, 6);
 
-      // Huge Belly / White Paint T-shirt
+      // Stylish Designer White Shirt
       ctx.fillStyle = '#f8fafc';
       ctx.beginPath();
-      ctx.ellipse(2 + bellyWobble, 0 + walkBob, 20, 22, 0, 0, Math.PI * 2);
+      ctx.roundRect(-16, -10 + walkBob, 32, 24, 6);
       ctx.fill();
 
-      // Paint Splatters on Shirt
-      ctx.fillStyle = '#e74c3c'; ctx.fillRect(-4 + bellyWobble, -4 + walkBob, 4, 4);
-      ctx.fillStyle = '#3498db'; ctx.fillRect(6 + bellyWobble, 2 + walkBob, 5, 4);
-      ctx.fillStyle = '#f1c40f'; ctx.fillRect(0 + bellyWobble, 8 + walkBob, 4, 5);
+      // Artistic Paint Splatters on Shirt
+      ctx.fillStyle = '#3b82f6'; ctx.fillRect(-8, -4 + walkBob, 5, 5); // Cyan
+      ctx.fillStyle = '#ef4444'; ctx.fillRect(4, 2 + walkBob, 4, 4); // Crimson
+      ctx.fillStyle = '#f59e0b'; ctx.fillRect(-2, 6 + walkBob, 5, 4); // Yellow
 
       // Text on Shirt "PABLO"
-      ctx.fillStyle = '#1e293b';
-      ctx.font = 'bold 6px sans-serif';
-      ctx.fillText('PABLO', -6 + bellyWobble, -2 + walkBob);
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 7px Tajawal, sans-serif';
+      ctx.fillText('PABLO', -10, 0 + walkBob);
 
-      // Head & Curly Hair & Full Beard
+      // Graphic Designer Stylus / Paintbrush in Hand
+      ctx.fillStyle = '#854d0e'; // Wooden handle
+      ctx.fillRect(14, -6 + walkBob + brushWave, 4, 14);
+      ctx.fillStyle = '#06b6d4'; // Cyan glowing brush tip
+      ctx.beginPath();
+      ctx.arc(16, -8 + walkBob + brushWave, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Head & Curly Hair & Beard
       ctx.fillStyle = '#e0a96d';
       ctx.beginPath();
       ctx.arc(0, -22 + walkBob, 12, 0, Math.PI * 2);
@@ -156,7 +164,7 @@ const CHARACTERS_DATA = {
       ctx.arc(0, -25 + walkBob, 13, Math.PI * 0.9, Math.PI * 2.1);
       ctx.fill();
 
-      // Beard
+      // Neat Beard
       ctx.beginPath();
       ctx.arc(0, -20 + walkBob, 11, 0.1, Math.PI - 0.1);
       ctx.fill();

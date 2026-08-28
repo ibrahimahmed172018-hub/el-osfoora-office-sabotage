@@ -510,12 +510,15 @@ class OfficeScene extends Phaser.Scene {
       graphics.fillStyle(0x1a1a1a, 1);
       graphics.fillCircle(0, -26 + walkBob, 11);
     } else if (charDef.id === 'pablo') {
-      // Big Belly & Cigarette
-      const wobble = Math.sin(tick * 0.3) * (isWalking ? 4 : 1);
+      // Stylish Designer Outfit with Paint Splatters & Paintbrush
       graphics.fillStyle(0xf8fafc, 1);
-      graphics.fillCircle(2 * flip + wobble, 2 + walkBob, 18); // Big Belly!
-      graphics.fillStyle(0xff3300, 1);
-      graphics.fillRect(8 * flip, -18 + walkBob, 3, 2); // Cigarette
+      graphics.fillRoundedRect(-14 * flip, -10 + walkBob, 28, 22, 6);
+      graphics.fillStyle(0x3b82f6, 1);
+      graphics.fillRect(-4 * flip, -4 + walkBob, 4, 4); // Cyan splash
+      graphics.fillStyle(0xef4444, 1);
+      graphics.fillRect(4 * flip, 2 + walkBob, 4, 4); // Red splash
+      graphics.fillStyle(0x06b6d4, 1);
+      graphics.fillCircle(14 * flip, -4 + walkBob, 3); // Glowing brush tip
     } else if (charDef.id === 'samaool') {
       // Giant Comical Nose & SAMA'OOL FC
       graphics.fillStyle(0x1abc9c, 1);
@@ -700,11 +703,19 @@ class OfficeScene extends Phaser.Scene {
       fx.lineBetween(x1, y1, x2, y2);
       this.time.delayedCall(250, () => fx.destroy());
     } else if (charId === 'pablo') {
-      // Belly Bump Screen Shake
-      this.cameras.main.shake(300, 0.02);
-      fx.fillStyle(0xffffff, 0.6);
-      fx.fillCircle(x2, y2, 40);
-      this.time.delayedCall(300, () => fx.destroy());
+      // Paint Splash & Photoshop Color Burst
+      const colors = [0x00d2ff, 0xff007f, 0xffea00, 0x7928ca, 0xffffff];
+      for (let i = 0; i < 14; i++) {
+        const angle = (i / 14) * Math.PI * 2;
+        const rad = 15 + Math.random() * 30;
+        const px = x2 + Math.cos(angle) * rad;
+        const py = y2 + Math.sin(angle) * rad;
+        fx.fillStyle(colors[i % colors.length], 0.9);
+        fx.fillCircle(px, py, 4 + Math.random() * 5);
+      }
+      fx.lineStyle(4, 0x00d2ff, 0.8);
+      fx.strokeCircle(x2, y2, 35);
+      this.time.delayedCall(350, () => fx.destroy());
     } else if (charId === 'samaool') {
       // Football Shot
       fx.fillStyle(0x2ecc71, 1);

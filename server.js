@@ -46,11 +46,11 @@ const CHARACTERS = {
     name: 'بابلو',
     title: 'جرافيك ديزاينر بريمو',
     color: '#3498db',
-    speed: 180,
-    specialMove: 'خبطة بالكرش / سحابة دخان',
-    specialDesc: 'Belly Bump بيهز الماب وسحابة دخان سيجارة',
+    speed: 190,
+    specialMove: 'ضربة الفرشاة الفنية (Paint Splash)',
+    specialDesc: 'رشة ألوان فوتوشوب متفجرة بدوامة ألوان فنية مبهرة',
     taskSpecial: 'عدل البوستر لمقاس 1080x1080',
-    physics: { speedMod: 0.9, bounce: 0.8, knockback: 1.8, noseHitbox: 0 }
+    physics: { speedMod: 1.0, bounce: 0.25, knockback: 1.2, noseHitbox: 0 }
   },
   samaool: {
     id: 'samaool',

@@ -97,9 +97,10 @@ class SoundEngine {
         }
         break;
 
-      case 'pablo': // Belly Bump (خبطة بالكرش)
-        this.playTone(80, 'sine', 0.5, 0.6); // Deep thud
-        setTimeout(() => this.playTone(120, 'triangle', 0.3, 0.4), 100);
+      case 'pablo': // Paint Splash (ضربة الفرشاة الفنية)
+        this.playTone(520, 'sine', 0.1, 0.4); // Brush swish
+        setTimeout(() => this.playTone(780, 'triangle', 0.15, 0.35), 60); // Paint pop
+        setTimeout(() => this.playTone(1100, 'sine', 0.2, 0.3), 120); // Color burst shimmer
         break;
 
       case 'samaool': // Design Kick (شوطة الموزة)
